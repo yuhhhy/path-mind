@@ -5,11 +5,13 @@
   "type": "module",
   "scripts": {
     "ready": "vp check && vp run -r test && vp run -r build",
-    "dev": "vp run website#dev",
+    "dev": "concurrently --kill-others-on-fail -n server,web -c magenta,cyan \"pnpm --filter server run dev\" \"wait-on http://localhost:3000/health && pnpm --filter web run dev\"",
     "prepare": "vp config"
   },
   "devDependencies": {
-    "vite-plus": "catalog:"
+    "concurrently": "^10.0.3",
+    "vite-plus": "catalog:",
+    "wait-on": "^9.0.10"
   },
   "devEngines": {
     "packageManager": {

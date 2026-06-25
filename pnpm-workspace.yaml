@@ -21,3 +21,6 @@ peerDependencyRules:
   allowedVersions:
     vite: "*"
     vitest: "*"
+allowBuilds:
+  "@prisma/engines": true
+  prisma: true

@@ -1,16 +1,17 @@
-<!--VITE PLUS START-->
+## 项目概览
 
-# Using Vite+, the Unified Toolchain for the Web
+PathMind 是一个目标驱动的 AI 学习教练系统。
 
-This project is using Vite+, a unified toolchain built on top of Vite, Rolldown, Vitest, tsdown, Oxlint, Oxfmt, and Vite Task. Vite+ wraps runtime management, package management, and frontend tooling in a single global CLI called `vp`. Vite+ is distinct from Vite, and it invokes Vite through `vp dev` and `vp build`. Run `vp help` to print a list of commands and `vp <command> --help` for information about a specific command.
+## 开发与验证
 
-Docs are local at `node_modules/vite-plus/docs` or online at https://viteplus.dev/guide/.
+- 安装：`vp install`
+- 开发：`vp dev`
+- 格式化与 Lint：`vp check --fix`
+- 测试：`vp test`
+- 构建：`vp build`
 
-## Review Checklist
+## 参考文档
 
-- [ ] Run `vp install` after pulling remote changes and before getting started.
-- [ ] Run `vp check` and `vp test` to format, lint, type check and test changes.
-- [ ] Check if there are `vite.config.ts` tasks or `package.json` scripts necessary for validation, run via `vp run <script>`.
-- [ ] If setup, runtime, or package-manager behavior looks wrong, run `vp env doctor` and include its output when asking for help.
+> **⚠️ 只要涉及以下场景，必须先读对应文档再操作。**
 
-<!--VITE PLUS END-->
+- 涉及构建、工具链配置：本地 `node_modules/vite-plus/docs` 或 <https://viteplus.dev/guide/>
