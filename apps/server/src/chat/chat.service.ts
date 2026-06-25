@@ -5,6 +5,10 @@ import { PrismaService } from '../prisma/prisma.service.js';
 import type { ChatSessionDto } from './dto/chat-session.dto.js';
 import { buildChatCoachPrompt } from './prompts/chat-coach.prompt.js';
 
+function isAutoStartMessage(content: string) {
+  return /^请开始当前 Step「.+」的教学。$/.test(content);
+}
+
 @Injectable()
 export class ChatService {
   constructor(
@@ -23,10 +27,12 @@ export class ChatService {
     }
 
     return {
-      messages: session.messages.map((message) => ({
-        role: message.role as ChatMessage['role'],
-        content: message.content,
-      })),
+      messages: session.messages
+        .filter((message) => !(message.role === 'user' && isAutoStartMessage(message.content)))
+        .map((message) => ({
+          role: message.role as ChatMessage['role'],
+          content: message.content,
+        })),
     };
   }
 
@@ -53,6 +59,8 @@ export class ChatService {
         },
       });
       messages = [...input.messages, { role: 'user', content: input.userMessage }];
+    } else if (input.silentUserMessage) {
+      messages = [...input.messages, { role: 'user', content: input.silentUserMessage }];
     }
 
     return {

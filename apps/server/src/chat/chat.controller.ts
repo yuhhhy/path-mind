@@ -31,6 +31,11 @@ import { ChatService } from './chat.service.js';
 import { chatSessionSchema } from './dto/chat-session.dto.js';
 import { appendMessageDelta } from './utils/message-buffer.js';
 
+function writeSse(res: ServerResponse, event: Parameters<typeof formatSseEvent>[0]) {
+  res.write(formatSseEvent(event));
+  (res as ServerResponse & { flush?: () => void }).flush?.();
+}
+
 @ApiTags('chat')
 @ApiExtraModels(SseDeltaEventDto, SseDoneEventDto, SseErrorEventDto)
 @Controller('chat')
@@ -104,18 +109,18 @@ export class ChatController {
           return;
         }
         assistantContent = appendMessageDelta(assistantContent, content);
-        res.write(formatSseEvent({ type: 'delta', content }));
+        writeSse(res, { type: 'delta', content });
       }
 
       if (!closed) {
         await this.chatService.saveAssistantMessage(prepared.sessionId, assistantContent);
-        res.write(formatSseEvent({ type: 'done' }));
+        writeSse(res, { type: 'done' });
         res.end();
       }
     } catch (error) {
       if (!closed) {
         const message = error instanceof Error ? error.message : 'AI 服务暂时不可用。';
-        res.write(formatSseEvent({ type: 'error', message }));
+        writeSse(res, { type: 'error', message });
         res.end();
       }
     }

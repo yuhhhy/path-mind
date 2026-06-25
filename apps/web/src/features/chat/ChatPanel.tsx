@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FormEvent } from 'react';
-import { Suspense, lazy, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatMessage, Goal, LearningStep } from '../goal/types';
 import { streamChatSession } from './api';
 import { chatSessionQueryOptions } from './queries';
@@ -22,8 +22,9 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState('');
   const abortRef = useRef<AbortController | null>(null);
+  const autoStartKeyRef = useRef('');
 
-  const chatOptions = chatSessionQueryOptions(goal.id, step.id);
+  const chatOptions = useMemo(() => chatSessionQueryOptions(goal.id, step.id), [goal.id, step.id]);
   const chatQuery = useQuery(chatOptions);
 
   useEffect(() => {
@@ -41,7 +42,7 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
   const statusLabel =
     step.status === 'done' ? '已完成' : step.status === 'learning' ? '学习中' : '待开始';
 
-  const appendAssistantDelta = (content: string) => {
+  const appendAssistantDelta = useCallback((content: string) => {
     setMessages((current) => {
       const next = [...current];
       const lastMessage = next.at(-1);
@@ -53,42 +54,78 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
 
       return [...next, { role: 'assistant', content }];
     });
-  };
+  }, []);
 
-  const runSession = async (history: ChatMessage[], userMessage?: string) => {
-    abortRef.current?.abort();
+  const runSession = useCallback(
+    async (
+      history: ChatMessage[],
+      options: { userMessage?: string; silentUserMessage?: string } = {},
+    ) => {
+      abortRef.current?.abort();
 
-    const abortController = new AbortController();
-    const visibleMessages = userMessage
-      ? [...history, { role: 'user' as const, content: userMessage }]
-      : history;
+      const abortController = new AbortController();
+      const visibleMessages = options.userMessage
+        ? [...history, { role: 'user' as const, content: options.userMessage }]
+        : history;
 
-    abortRef.current = abortController;
-    setError('');
-    setIsStreaming(true);
-    setMessages([...visibleMessages, { role: 'assistant', content: '' }]);
+      abortRef.current = abortController;
+      setError('');
+      setIsStreaming(true);
+      setMessages([...visibleMessages, { role: 'assistant', content: '' }]);
 
-    await streamChatSession(
-      { goal, step, messages: history, userMessage },
-      {
-        onDelta(content) {
-          appendAssistantDelta(content);
+      await streamChatSession(
+        {
+          goal,
+          step,
+          messages: history,
+          userMessage: options.userMessage,
+          silentUserMessage: options.silentUserMessage,
         },
-        onDone() {
-          setIsStreaming(false);
-          void queryClient.invalidateQueries({ queryKey: chatOptions.queryKey });
+        {
+          onDelta(content) {
+            appendAssistantDelta(content);
+          },
+          onDone() {
+            setIsStreaming(false);
+            void queryClient.invalidateQueries({ queryKey: chatOptions.queryKey });
+          },
+          onError(streamError) {
+            setError(streamError.message || 'AI 服务暂时不可用，请检查后端服务或 API Key。');
+            setIsStreaming(false);
+          },
         },
-        onError(streamError) {
-          setError(streamError.message || 'AI 服务暂时不可用，请检查后端服务或 API Key。');
-          setIsStreaming(false);
-        },
-      },
-      abortController.signal,
+        abortController.signal,
+      );
+    },
+    [appendAssistantDelta, chatOptions.queryKey, goal, queryClient, step],
+  );
+
+  useEffect(() => {
+    if (chatQuery.isLoading || isStreaming || !chatQuery.data) return;
+
+    const currentKey = `${goal.id}:${step.id}`;
+    if (autoStartKeyRef.current === currentKey) return;
+
+    const persistedMessages = chatQuery.data.messages;
+    const hasAssistantReply = persistedMessages.some(
+      (message) => message.role === 'assistant' && message.content.trim().length > 0,
     );
-  };
+    if (hasAssistantReply) return;
+
+    const startTimer = window.setTimeout(() => {
+      autoStartKeyRef.current = currentKey;
+      if (persistedMessages.length > 0) {
+        void runSession(persistedMessages);
+      } else {
+        void runSession([], { silentUserMessage: `请开始当前 Step「${step.title}」的教学。` });
+      }
+    }, 0);
+
+    return () => window.clearTimeout(startTimer);
+  }, [chatQuery.data, chatQuery.isLoading, goal.id, isStreaming, runSession, step.id, step.title]);
 
   const handleStart = () => {
-    void runSession([], `请开始当前 Step「${step.title}」的教学。`);
+    void runSession([], { silentUserMessage: `请开始当前 Step「${step.title}」的教学。` });
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -100,7 +137,7 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
 
     const history = messages.filter((message) => message.content.trim().length > 0);
     setDraft('');
-    void runSession(history, content);
+    void runSession(history, { userMessage: content });
   };
 
   return (

@@ -64,6 +64,7 @@ export const chatSessionSchema = z.object({
     }),
   ),
   userMessage: z.string().min(1).optional(),
+  silentUserMessage: z.string().min(1).optional(),
 });
 
 export type ChatSessionDto = z.infer<typeof chatSessionSchema>;

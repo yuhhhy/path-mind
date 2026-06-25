@@ -56,6 +56,7 @@ export function buildChatCoachPrompt(input: ChatSessionInput) {
 - 预计时长：${step.estimatedMinutes} 分钟
 
 教学要求：
+0. 始终使用简体中文回复。除非用户明确要求英文，否则不要切换到英文。
 1. 先说明当前 Step 要解决的问题。
 2. 根据教学策略调整讲解方式。
 3. 如果是第一性原理，用因果链解释：为什么需要这个机制 → 没有它会发生什么问题 → 它如何解决 → 它和上下游步骤的关系。

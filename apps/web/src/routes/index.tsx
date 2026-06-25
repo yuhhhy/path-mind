@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { ArrowUpRight, Clock, FolderOpen, Plus, Sparkles, Target } from 'lucide-react';
 import { useState } from 'react';
-import { generateAndSaveLearningPath } from '../features/goal/api';
+import { initGoal } from '../features/goal/api';
 import { mockGoals } from '../features/goal/mockGoals';
 import { goalsQueryOptions } from '../features/goal/queries';
 import type { GenerateLearningPathInput } from '../features/goal/types';
@@ -46,11 +46,11 @@ function DashboardPage() {
           assessmentMethods: ['teach_back', 'interview_question'],
         },
       };
-      return generateAndSaveLearningPath(input);
+      return initGoal(input);
     },
-    onSuccess(goal) {
+    onSuccess({ goalId }) {
       void queryClient.invalidateQueries({ queryKey: goalsOptions.queryKey });
-      void navigate({ to: '/goals/$goalId', params: { goalId: goal.id } });
+      void navigate({ to: '/goals/$goalId', params: { goalId } });
     },
   });
 

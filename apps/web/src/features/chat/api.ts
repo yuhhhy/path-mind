@@ -11,6 +11,7 @@ interface StreamChatCallbacks {
 
 export interface StreamChatSessionInput extends ChatSessionInput {
   userMessage?: string;
+  silentUserMessage?: string;
 }
 
 export async function getChatSession(

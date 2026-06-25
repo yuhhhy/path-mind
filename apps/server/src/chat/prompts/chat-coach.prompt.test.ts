@@ -40,8 +40,14 @@ describe('buildChatCoachPrompt', () => {
   it('includes the teaching strategy and flowchart instruction', () => {
     const prompt = buildChatCoachPrompt(input);
 
-    expect(prompt).toContain('first_principles');
-    expect(prompt).toContain('flowchart');
+    expect(prompt).toContain('第一性原理');
     expect(prompt).toContain('文本流程图');
+  });
+
+  it('keeps coach replies in simplified Chinese by default', () => {
+    const prompt = buildChatCoachPrompt(input);
+
+    expect(prompt).toContain('始终使用简体中文回复');
+    expect(prompt).toContain('除非用户明确要求英文');
   });
 });

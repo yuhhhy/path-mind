@@ -15,6 +15,7 @@ describe('buildLearningPathPrompt', () => {
 
     expect(prompt).toContain('理解浏览器渲染');
     expect(prompt).toContain('严格 JSON');
+    expect(prompt).not.toContain('METADATA:');
   });
 
   it('contains the first principles causal chain requirement', () => {

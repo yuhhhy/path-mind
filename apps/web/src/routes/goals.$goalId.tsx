@@ -1,24 +1,102 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, createFileRoute, useRouterState } from '@tanstack/react-router';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { streamGoalSteps } from '../features/goal/api';
 import { LearningPath } from '../features/goal/LearningPath';
 import { mockGoals } from '../features/goal/mockGoals';
 import { goalQueryOptions } from '../features/goal/queries';
+import type { Goal, LearningStep } from '../features/goal/types';
 import { useBreadcrumb } from '../shared/layout/BreadcrumbContext';
 
 export const Route = createFileRoute('/goals/$goalId')({
   component: GoalDetailPage,
 });
 
+function StepSkeleton() {
+  return (
+    <div className="animate-pulse rounded-lg border border-gray-100 bg-white p-4">
+      <div className="flex gap-3">
+        <div className="mt-0.5 h-6 w-6 shrink-0 rounded-full bg-gray-100" />
+        <div className="flex-1 space-y-2">
+          <div className="h-3 w-16 rounded bg-gray-100" />
+          <div className="h-4 w-3/4 rounded bg-gray-100" />
+          <div className="h-3 w-full rounded bg-gray-100" />
+          <div className="h-3 w-2/3 rounded bg-gray-100" />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function mergeSteps(current: LearningStep[], incoming: LearningStep[]) {
+  const byId = new Map<string, LearningStep>();
+  for (const step of current) byId.set(step.id, step);
+  for (const step of incoming) byId.set(step.id, step);
+  return [...byId.values()];
+}
+
 function GoalDetailPage() {
   const { goalId } = Route.useParams();
+  const queryClient = useQueryClient();
   const isSessionRoute = useRouterState({
     select: (state) => state.location.pathname.includes(`/goals/${goalId}/session/`),
   });
   const fallbackGoal = mockGoals.find((item) => item.id === goalId);
-  const goalQuery = useQuery(goalQueryOptions(goalId));
+  const goalOptions = useMemo(() => goalQueryOptions(goalId), [goalId]);
+  const goalQuery = useQuery(goalOptions);
   const goal = goalQuery.data ?? (goalQuery.isError ? fallbackGoal : undefined);
 
+  const [streamedSteps, setStreamedSteps] = useState<LearningStep[]>([]);
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [streamError, setStreamError] = useState('');
+  const streamStarted = useRef(false);
+
   useBreadcrumb([{ label: '学习目标', href: '/goals' }, { label: goal?.title ?? '' }]);
+
+  useEffect(() => {
+    if (goal?.status !== 'initializing') {
+      return;
+    }
+    if (streamStarted.current) {
+      return;
+    }
+    streamStarted.current = true;
+
+    let cleanup: (() => void) | undefined;
+    const startTimer = window.setTimeout(() => {
+      setIsStreaming(true);
+      cleanup = streamGoalSteps(goalId, {
+        onStep(step) {
+          setStreamedSteps((prev) => mergeSteps(prev, [step]));
+          queryClient.setQueryData<Goal>(goalOptions.queryKey, (current) => {
+            if (!current) return current;
+            return {
+              ...current,
+              steps: mergeSteps(current.steps, [step]),
+            };
+          });
+        },
+        onDone() {
+          setIsStreaming(false);
+          queryClient.setQueryData<Goal>(goalOptions.queryKey, (current) =>
+            current ? { ...current, status: 'active' } : current,
+          );
+          void queryClient.invalidateQueries({ queryKey: goalOptions.queryKey });
+        },
+        onError(error) {
+          setIsStreaming(false);
+          setStreamError(error.message);
+        },
+      });
+    }, 0);
+
+    return () => {
+      window.clearTimeout(startTimer);
+      streamStarted.current = false;
+      setIsStreaming(false);
+      cleanup?.();
+    };
+  }, [goal?.status, goalId, goalOptions.queryKey, queryClient]);
 
   if (isSessionRoute) {
     return <Outlet />;
@@ -38,7 +116,12 @@ function GoalDetailPage() {
     );
   }
 
-  const completedSteps = goal.steps.filter((s) => s.status === 'done').length;
+  const isInitializing = goal.status === 'initializing';
+  const displayedSteps = mergeSteps(goal.steps, streamedSteps);
+  const displayedGoal: Goal = { ...goal, steps: displayedSteps };
+  const isPathGenerating = isInitializing || isStreaming;
+
+  const completedSteps = displayedGoal.steps.filter((s) => s.status === 'done').length;
   const strategyLabel: Record<string, string> = {
     first_principles: '第一性原理',
     step_by_step: '逐步教学',
@@ -58,45 +141,59 @@ function GoalDetailPage() {
       <section className="rounded-lg border border-gray-200 bg-white p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 max-w-2xl flex-1">
-            <p className="text-xs font-medium uppercase tracking-wider text-gray-400">目标详情</p>
+            <div className="flex items-center gap-2">
+              <p className="text-xs font-medium uppercase tracking-wider text-gray-400">目标详情</p>
+              {isInitializing && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-blue-50 px-2 py-0.5 text-xs font-medium text-blue-600">
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+                  AI 规划中
+                </span>
+              )}
+            </div>
             <h1 className="mt-1.5 text-xl font-bold tracking-tight text-gray-900">{goal.title}</h1>
-            <p className="mt-2 text-sm leading-relaxed text-gray-500">{goal.description}</p>
+            {goal.description && (
+              <p className="mt-2 text-sm leading-relaxed text-gray-500">{goal.description}</p>
+            )}
 
-            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-gray-500">
-              <span>
-                {goal.status === 'active'
-                  ? '进行中'
-                  : goal.status === 'completed'
-                    ? '已完成'
-                    : '暂停'}
-              </span>
-              <span>进度 {goal.progress}%</span>
-              <span>
-                {completedSteps}/{goal.steps.length} 步完成
-              </span>
-              <span>预计 {goal.estimatedMinutes} 分钟</span>
-            </div>
+            {!isInitializing && (
+              <>
+                <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-gray-500">
+                  <span>
+                    {goal.status === 'active'
+                      ? '进行中'
+                      : goal.status === 'completed'
+                        ? '已完成'
+                        : '暂停'}
+                  </span>
+                  <span>进度 {goal.progress}%</span>
+                  <span>
+                    {completedSteps}/{displayedGoal.steps.length} 步完成
+                  </span>
+                  <span>预计 {goal.estimatedMinutes} 分钟</span>
+                </div>
 
-            <div className="mt-3 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-gray-100">
-              <div
-                className="h-full rounded-full bg-blue-600 transition-all duration-500"
-                style={{ width: `${goal.progress}%` }}
-              />
-            </div>
+                <div className="mt-3 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className="h-full rounded-full bg-blue-600 transition-all duration-500"
+                    style={{ width: `${goal.progress}%` }}
+                  />
+                </div>
 
-            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
-              <span>
-                教学策略：
-                {strategyLabel[goal.learningConfig.teachingStrategy] ??
-                  goal.learningConfig.teachingStrategy}
-              </span>
-              <span>
-                验证方式：
-                {goal.learningConfig.assessmentMethods
-                  .map((m) => assessmentLabel[m] ?? m)
-                  .join('、')}
-              </span>
-            </div>
+                <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
+                  <span>
+                    教学策略：
+                    {strategyLabel[goal.learningConfig.teachingStrategy] ??
+                      goal.learningConfig.teachingStrategy}
+                  </span>
+                  <span>
+                    验证方式：
+                    {goal.learningConfig.assessmentMethods
+                      .map((m) => assessmentLabel[m] ?? m)
+                      .join('、')}
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           <div className="shrink-0">
@@ -116,17 +213,73 @@ function GoalDetailPage() {
       <section className="space-y-3">
         <p className="text-xs font-medium uppercase tracking-wider text-gray-400">学习路径</p>
         <div className="grid gap-6 lg:grid-cols-[1fr_260px] lg:items-start">
-          <LearningPath goal={goal} />
+          {isPathGenerating ? (
+            <div className="space-y-2">
+              {displayedSteps.map((step, index) => (
+                <article className="rounded-lg border border-gray-200 bg-white p-4" key={step.id}>
+                  <div className="flex gap-3">
+                    <div className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-gray-50 ring-1 ring-gray-200">
+                      <span className="text-[10px] font-medium text-gray-400">{index + 1}</span>
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-xs font-medium text-gray-400">Step {index + 1}</p>
+                          <h3 className="mt-0.5 text-sm font-semibold text-gray-900">
+                            {step.title}
+                          </h3>
+                          <p className="mt-1 text-sm leading-relaxed text-gray-500">
+                            {step.description}
+                          </p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2.5">
+                          <span className="text-xs text-gray-400">
+                            {step.estimatedMinutes} 分钟
+                          </span>
+                          <Link
+                            className="inline-flex h-7 items-center justify-center rounded-md border border-gray-300 bg-white px-3 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                            to="/goals/$goalId/session/$stepId"
+                            params={{ goalId, stepId: step.id }}
+                          >
+                            开始
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </article>
+              ))}
+              {isStreaming && <StepSkeleton />}
+              {streamError && (
+                <p className="rounded-md border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
+                  {streamError}
+                </p>
+              )}
+            </div>
+          ) : (
+            <LearningPath goal={displayedGoal} />
+          )}
+
           <aside className="rounded-lg border border-gray-200 bg-white p-5 lg:sticky lg:top-6">
             <p className="text-xs font-medium uppercase tracking-wider text-gray-400">最终成果</p>
-            <ul className="mt-3 space-y-2.5">
-              {goal.finalOutcome.map((outcome) => (
-                <li className="flex gap-2 text-sm leading-relaxed text-gray-600" key={outcome}>
-                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-gray-300" />
-                  <span>{outcome}</span>
-                </li>
-              ))}
-            </ul>
+            {isPathGenerating && displayedGoal.finalOutcome.length === 0 ? (
+              <div className="mt-3 space-y-2">
+                {[80, 60, 70].map((w) => (
+                  <div className="animate-pulse" key={w} style={{ width: `${w}%` }}>
+                    <div className="h-3 rounded bg-gray-100" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <ul className="mt-3 space-y-2.5">
+                {goal.finalOutcome.map((outcome) => (
+                  <li className="flex gap-2 text-sm leading-relaxed text-gray-600" key={outcome}>
+                    <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-gray-300" />
+                    <span>{outcome}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </aside>
         </div>
       </section>
