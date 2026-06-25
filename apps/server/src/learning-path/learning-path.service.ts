@@ -1,14 +1,17 @@
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { Inject, Injectable } from '@nestjs/common';
-import type { GenerateLearningPathOutput } from '@pathmind/shared';
+import type { GenerateLearningPathOutput, Goal, LearningStep } from '@pathmind/shared';
 import { AiService } from '../ai/ai.service.js';
+import { buildChatCoachPrompt } from '../chat/prompts/chat-coach.prompt.js';
 import type { SseEvent } from '../common/sse/sse.types.js';
 import { formatSseEvent } from '../common/sse/sse.utils.js';
+import { toSharedGoal } from '../goals/utils/goal.mapper.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { GenerateLearningPathDto } from './dto/generate-learning-path.dto.js';
 import { buildLearningPathPrompt } from './prompts/learning-path.prompt.js';
 
 const DEV_USER_ID = 'local-dev-user';
+const INITIAL_CHAT_PREWARM_CONCURRENCY = 2;
 
 function writeSse(res: ServerResponse, event: SseEvent) {
   res.write(formatSseEvent(event));
@@ -17,6 +20,10 @@ function writeSse(res: ServerResponse, event: SseEvent) {
 
 @Injectable()
 export class LearningPathService {
+  private readonly pendingInitialChatPrewarm: Array<() => Promise<void>> = [];
+  private readonly prewarmingStepIds = new Set<string>();
+  private activeInitialChatPrewarmCount = 0;
+
   constructor(
     @Inject(AiService) private readonly aiService: AiService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
@@ -145,6 +152,7 @@ export class LearningPathService {
               estimatedMinutes: step.estimatedMinutes,
             },
           });
+          this.scheduleInitialChatPrewarm(goalId, step.id);
         }
       }
 
@@ -163,5 +171,86 @@ export class LearningPathService {
         res.end();
       }
     }
+  }
+
+  private scheduleInitialChatPrewarm(goalId: string, stepId: string) {
+    if (this.prewarmingStepIds.has(stepId)) return;
+
+    this.prewarmingStepIds.add(stepId);
+    this.pendingInitialChatPrewarm.push(async () => {
+      try {
+        await this.generateInitialChatForStep(goalId, stepId);
+      } finally {
+        this.prewarmingStepIds.delete(stepId);
+      }
+    });
+    this.runInitialChatPrewarmQueue();
+  }
+
+  private runInitialChatPrewarmQueue() {
+    while (
+      this.activeInitialChatPrewarmCount < INITIAL_CHAT_PREWARM_CONCURRENCY &&
+      this.pendingInitialChatPrewarm.length > 0
+    ) {
+      const task = this.pendingInitialChatPrewarm.shift();
+      if (!task) return;
+
+      this.activeInitialChatPrewarmCount++;
+      void task().finally(() => {
+        this.activeInitialChatPrewarmCount--;
+        this.runInitialChatPrewarmQueue();
+      });
+    }
+  }
+
+  private async generateInitialChatForStep(goalId: string, stepId: string): Promise<void> {
+    const goalRecord = await this.prisma.goal.findUnique({
+      where: { id: goalId, devUserId: DEV_USER_ID },
+      include: { steps: { orderBy: { order: 'asc' } } },
+    });
+    const stepRecord = goalRecord?.steps.find((step) => step.id === stepId);
+    if (!goalRecord || !stepRecord) return;
+
+    const session = await this.prisma.chatSession.upsert({
+      where: { stepId },
+      create: { goalId, stepId },
+      update: { goalId },
+    });
+
+    const existingAssistantMessage = await this.prisma.chatMessage.findFirst({
+      where: { sessionId: session.id, role: 'assistant' },
+      select: { id: true },
+    });
+    if (existingAssistantMessage) return;
+
+    const goal = toSharedGoal(goalRecord);
+    const step: LearningStep = {
+      id: stepRecord.id,
+      title: stepRecord.title,
+      description: stepRecord.description,
+      status: stepRecord.status as LearningStep['status'],
+      estimatedMinutes: stepRecord.estimatedMinutes,
+    };
+    const userMessage = `请开始当前 Step「${step.title}」的教学。`;
+    const systemPrompt = buildChatCoachPrompt({ goal: goal as Goal, step, messages: [] });
+    let assistantContent = '';
+
+    for await (const chunk of this.aiService.streamCoachReply(systemPrompt, [
+      { role: 'user', content: userMessage },
+    ])) {
+      assistantContent += chunk;
+    }
+
+    if (!assistantContent.trim()) return;
+
+    const assistantMessageAfterGeneration = await this.prisma.chatMessage.findFirst({
+      where: { sessionId: session.id, role: 'assistant' },
+      select: { id: true },
+    });
+    if (assistantMessageAfterGeneration) return;
+
+    await this.prisma.chatMessage.create({
+      data: { sessionId: session.id, role: 'assistant', content: assistantContent },
+    });
   }
 }

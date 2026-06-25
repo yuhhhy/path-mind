@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Inject,
   Param,
@@ -45,5 +46,10 @@ export class GoalsController {
   @Patch(':goalId/steps/:stepId/complete')
   completeStep(@Param('goalId') goalId: string, @Param('stepId') stepId: string) {
     return this.goalsService.completeStep(goalId, stepId);
+  }
+
+  @Delete(':goalId')
+  remove(@Param('goalId') goalId: string) {
+    return this.goalsService.remove(goalId);
   }
 }

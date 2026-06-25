@@ -189,3 +189,11 @@ export async function completeStep(goalId: string, stepId: string): Promise<Goal
 
   return parseJsonResponse(response, 'AI 服务暂时不可用，请检查后端服务或数据库。');
 }
+
+export async function deleteGoal(goalId: string): Promise<{ id: string }> {
+  const response = await fetch(`${API_BASE_URL}/goals/${goalId}`, {
+    method: 'DELETE',
+  });
+
+  return parseJsonResponse(response, '删除失败，请稍后重试。');
+}

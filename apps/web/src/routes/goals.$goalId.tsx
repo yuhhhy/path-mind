@@ -1,10 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, Outlet, createFileRoute, useRouterState } from '@tanstack/react-router';
+import { Link, Outlet, createFileRoute, useNavigate, useRouterState } from '@tanstack/react-router';
+import { MoreHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { streamGoalSteps } from '../features/goal/api';
+import { deleteGoal, streamGoalSteps } from '../features/goal/api';
 import { LearningPath } from '../features/goal/LearningPath';
 import { mockGoals } from '../features/goal/mockGoals';
-import { goalQueryOptions } from '../features/goal/queries';
+import { goalQueryOptions, goalsQueryOptions } from '../features/goal/queries';
 import type { Goal, LearningStep } from '../features/goal/types';
 import { useBreadcrumb } from '../shared/layout/BreadcrumbContext';
 
@@ -37,18 +38,22 @@ function mergeSteps(current: LearningStep[], incoming: LearningStep[]) {
 
 function GoalDetailPage() {
   const { goalId } = Route.useParams();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const isSessionRoute = useRouterState({
     select: (state) => state.location.pathname.includes(`/goals/${goalId}/session/`),
   });
   const fallbackGoal = mockGoals.find((item) => item.id === goalId);
   const goalOptions = useMemo(() => goalQueryOptions(goalId), [goalId]);
+  const goalsOptions = useMemo(() => goalsQueryOptions(), []);
   const goalQuery = useQuery(goalOptions);
   const goal = goalQuery.data ?? (goalQuery.isError ? fallbackGoal : undefined);
 
   const [streamedSteps, setStreamedSteps] = useState<LearningStep[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamError, setStreamError] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [isGoalMenuOpen, setIsGoalMenuOpen] = useState(false);
   const streamStarted = useRef(false);
 
   useBreadcrumb([{ label: '学习目标', href: '/goals' }, { label: goal?.title ?? '' }]);
@@ -136,9 +141,24 @@ function GoalDetailPage() {
     interview_question: '面试题验证',
   };
 
+  const handleDeleteGoal = async () => {
+    if (!window.confirm(`确定删除学习目标「${goal.title}」吗？这个操作不可恢复。`)) return;
+
+    setIsGoalMenuOpen(false);
+    setIsDeleting(true);
+    try {
+      await deleteGoal(goalId);
+      queryClient.removeQueries({ queryKey: goalOptions.queryKey });
+      void queryClient.invalidateQueries({ queryKey: goalsOptions.queryKey });
+      void navigate({ to: '/goals' });
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
-      <section className="rounded-lg border border-gray-200 bg-white p-6">
+      <section className="relative rounded-lg border border-gray-200 bg-white p-6 pb-12">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 max-w-2xl flex-1">
             <div className="flex items-center gap-2">
@@ -207,6 +227,36 @@ function GoalDetailPage() {
                     : goal.type}
             </span>
           </div>
+        </div>
+
+        <div className="absolute bottom-4 right-4">
+          <button
+            aria-expanded={isGoalMenuOpen}
+            aria-haspopup="menu"
+            className="inline-flex h-8 w-8 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-700"
+            onClick={() => setIsGoalMenuOpen((current) => !current)}
+            type="button"
+          >
+            <MoreHorizontal size={18} />
+          </button>
+
+          {isGoalMenuOpen && (
+            <div
+              className="absolute bottom-9 right-0 z-10 w-28 overflow-hidden rounded-md border border-gray-200 bg-white shadow-lg shadow-gray-200/70"
+              role="menu"
+            >
+              <button
+                className="flex h-9 w-full items-center gap-1.5 bg-red-50 px-2.5 text-left font-medium text-red-600 transition-colors hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={isDeleting}
+                onClick={handleDeleteGoal}
+                role="menuitem"
+                type="button"
+              >
+                <Trash2 size={12} />
+                <span className="text-xs">{isDeleting ? '正在删除' : '删除目标'}</span>
+              </button>
+            </div>
+          )}
         </div>
       </section>
 

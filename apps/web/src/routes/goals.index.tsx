@@ -32,7 +32,7 @@ function GoalsPage() {
           const totalSteps = goal.steps.length;
           return (
             <Link
-              className="block rounded-lg border border-gray-200 bg-white p-5 transition-colors hover:border-gray-300 cursor-pointer"
+              className="block cursor-pointer rounded-lg border border-gray-200 bg-white p-5 transition-colors hover:border-gray-300"
               key={goal.id}
               to="/goals/$goalId"
               params={{ goalId: goal.id }}

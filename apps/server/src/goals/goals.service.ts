@@ -14,7 +14,7 @@ export class GoalsService {
   async findAll(): Promise<Goal[]> {
     const goals = await this.prisma.goal.findMany({
       where: { devUserId: DEV_USER_ID },
-      orderBy: { updatedAt: 'desc' },
+      orderBy: { createdAt: 'desc' },
       include: { steps: { orderBy: { order: 'asc' } } },
     });
 
@@ -101,5 +101,22 @@ export class GoalsService {
     });
 
     return toSharedGoal(updatedGoal);
+  }
+
+  async remove(goalId: string): Promise<{ id: string }> {
+    const goal = await this.prisma.goal.findFirst({
+      where: { id: goalId, devUserId: DEV_USER_ID },
+      select: { id: true },
+    });
+
+    if (!goal) {
+      throw new NotFoundException('没有找到这个 Goal。');
+    }
+
+    await this.prisma.goal.delete({
+      where: { id: goalId },
+    });
+
+    return { id: goalId };
   }
 }
