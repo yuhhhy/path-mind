@@ -9,6 +9,7 @@
     "prepare": "vp config"
   },
   "devDependencies": {
+    "@tanstack/eslint-plugin-query": "^5.101.1",
     "concurrently": "^10.0.3",
     "vite-plus": "catalog:",
     "wait-on": "^9.0.10"
