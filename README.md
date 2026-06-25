@@ -1,29 +1,11 @@
-# Vite+ Monorepo Starter
+# PathMind
 
-A starter for creating a Vite+ monorepo.
+PathMind is a goal-driven AI learning coach that not only answers questions, but also plans paths around learning goals, organizes the learning process, and accompanies users to complete the entire learning loop.
 
-## Development
-
-- Check everything is ready:
+# Development
 
 ```bash
+vp install
 vp run ready
-```
-
-- Run the tests:
-
-```bash
-vp run -r test
-```
-
-- Build the monorepo:
-
-```bash
-vp run -r build
-```
-
-- Run the development server:
-
-```bash
 vp run dev
 ```
