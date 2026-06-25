@@ -1,6 +1,9 @@
-import { Link, createFileRoute } from '@tanstack/react-router';
-import { ArrowUpRight, Clock, FolderOpen, Plus, Target } from 'lucide-react';
+import { useMutation } from '@tanstack/react-query';
+import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
+import { ArrowUpRight, Clock, FolderOpen, Plus, Sparkles, Target } from 'lucide-react';
+import { generateLearningPath } from '../features/goal/api';
 import { useGoalStore } from '../features/goal/goalStore';
+import type { GenerateLearningPathInput } from '../features/goal/types';
 
 export const Route = createFileRoute('/')({
   component: DashboardPage,
@@ -20,7 +23,27 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 };
 
 function DashboardPage() {
+  const navigate = useNavigate();
   const goals = useGoalStore((state) => state.goals);
+  const createGoalFromGeneratedPath = useGoalStore((state) => state.createGoalFromGeneratedPath);
+
+  const defaultAiGoalInput: GenerateLearningPathInput = {
+    goalTitle: '学会从输入 URL 到浏览器渲染',
+    goalType: 'understand_concept',
+    learningConfig: {
+      teachingStrategy: 'first_principles',
+      preferredOutputFormats: ['flowchart', 'text'],
+      assessmentMethods: ['teach_back', 'interview_question'],
+    },
+  };
+
+  const createGoalMutation = useMutation({
+    mutationFn: generateLearningPath,
+    onSuccess(output, input) {
+      const goal = createGoalFromGeneratedPath(input, output);
+      void navigate({ to: '/goals/$goalId', params: { goalId: goal.id } });
+    },
+  });
 
   return (
     <div className="space-y-8">
@@ -31,6 +54,31 @@ function DashboardPage() {
           围绕目标规划路径、完成学习步骤，并通过复述和练习验证理解。
         </p>
       </div>
+
+      <section className="rounded-lg border border-slate-200 bg-white p-4">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold text-slate-800">用 AI 生成学习路径</p>
+            <p className="mt-1 text-xs leading-relaxed text-slate-500">
+              默认目标：学会从输入 URL 到浏览器渲染。
+            </p>
+            {createGoalMutation.isError && (
+              <p className="mt-2 text-xs text-red-600">
+                AI 服务暂时不可用，请检查后端服务或 API Key。
+              </p>
+            )}
+          </div>
+          <button
+            className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200"
+            disabled={createGoalMutation.isPending}
+            onClick={() => createGoalMutation.mutate(defaultAiGoalInput)}
+            type="button"
+          >
+            <Sparkles size={15} />
+            {createGoalMutation.isPending ? '生成中...' : '用 AI 生成学习路径'}
+          </button>
+        </div>
+      </section>
 
       {/* Goal tracking section */}
       <section>
