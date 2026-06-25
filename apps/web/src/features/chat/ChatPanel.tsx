@@ -1,10 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FormEvent } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useRef, useState } from 'react';
 import type { ChatMessage, Goal, LearningStep } from '../goal/types';
 import { streamChatSession } from './api';
-import { MarkdownMessage } from './MarkdownMessage';
 import { chatSessionQueryOptions } from './queries';
+
+// Lazy-load to split shiki/rehype-pretty-code out of the main bundle
+const MarkdownRenderer = lazy(() =>
+  import('./MarkdownRenderer').then((m) => ({ default: m.MarkdownRenderer })),
+);
 
 interface ChatPanelProps {
   goal: Goal;
@@ -150,7 +154,9 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
               >
                 {message.role === 'assistant' ? (
                   message.content ? (
-                    <MarkdownMessage content={message.content} />
+                    <Suspense fallback={<p className="text-gray-400">渲染中...</p>}>
+                      <MarkdownRenderer content={message.content} />
+                    </Suspense>
                   ) : (
                     <p className="text-gray-400">AI 正在组织讲解...</p>
                   )

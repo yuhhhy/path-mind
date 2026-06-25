@@ -1,4 +1,7 @@
 @import 'tailwindcss';
+@plugin "@tailwindcss/typography";
+/* Syntax highlighting theme for AI-generated code blocks */
+@import 'highlight.js/styles/github-dark.min.css';
 
 :root {
   font-family:
