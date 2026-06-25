@@ -2,7 +2,9 @@ import { common } from 'lowlight';
 import ReactMarkdown from 'react-markdown';
 import type { Components } from 'react-markdown';
 import rehypeHighlight from 'rehype-highlight';
+import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
 
 const components: Components = {
   // Dark code block container — not-prose prevents Typography from overriding it
@@ -64,10 +66,25 @@ const components: Components = {
   },
 };
 
-const remarkPlugins = [remarkGfm];
-const rehypePlugins = [[rehypeHighlight, { languages: common, detect: true }]] as Parameters<
-  typeof ReactMarkdown
->[0]['rehypePlugins'];
+const remarkPlugins = [remarkGfm, remarkMath];
+const rehypePlugins = [
+  [rehypeHighlight, { languages: common, detect: true }],
+  rehypeKatex,
+] as Parameters<typeof ReactMarkdown>[0]['rehypePlugins'];
+
+// LLMs output various math delimiters; remark-math only reads $$ (block) and $ (inline).
+// remark-math rejects "$ content $" when there's a space after $, so we must trim.
+function normalizeMathDelimiters(content: string): string {
+  return (
+    content
+      // \[...\] → $$ block (trim surrounding whitespace so $$ is flush with content)
+      .replace(/\\\[([\s\S]*?)\\\]/g, (_, math: string) => `\n$$\n${math.trim()}\n$$\n`)
+      // \(...\) → $ inline (trim spaces LLMs add inside delimiters, e.g. \( P \) → $P$)
+      .replace(/\\\(([\s\S]*?)\\\)/g, (_, math: string) => `$${math.trim()}$`)
+      // lone $ on its own line used as block fence → $$
+      .replace(/^\$$/gm, '$$')
+  );
+}
 
 interface MarkdownRendererProps {
   content: string;
@@ -101,7 +118,7 @@ export function MarkdownRenderer({ content }: MarkdownRendererProps) {
         rehypePlugins={rehypePlugins}
         components={components}
       >
-        {content}
+        {normalizeMathDelimiters(content)}
       </ReactMarkdown>
     </div>
   );

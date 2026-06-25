@@ -2,6 +2,8 @@
 @plugin "@tailwindcss/typography";
 /* Syntax highlighting theme for AI-generated code blocks */
 @import 'highlight.js/styles/github-dark.min.css';
+/* KaTeX math rendering styles */
+@import 'katex/dist/katex.min.css';
 
 :root {
   font-family:
