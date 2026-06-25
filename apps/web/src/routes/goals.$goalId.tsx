@@ -1,9 +1,9 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link, Outlet, createFileRoute, useRouterState } from '@tanstack/react-router';
-import { ArrowLeft } from 'lucide-react';
 import { LearningPath } from '../features/goal/LearningPath';
 import { mockGoals } from '../features/goal/mockGoals';
 import { goalQueryOptions } from '../features/goal/queries';
+import { useBreadcrumb } from '../shared/layout/BreadcrumbContext';
 
 export const Route = createFileRoute('/goals/$goalId')({
   component: GoalDetailPage,
@@ -17,6 +17,8 @@ function GoalDetailPage() {
   const fallbackGoal = mockGoals.find((item) => item.id === goalId);
   const goalQuery = useQuery(goalQueryOptions(goalId));
   const goal = goalQuery.data ?? (goalQuery.isError ? fallbackGoal : undefined);
+
+  useBreadcrumb([{ label: '学习目标', href: '/goals' }, { label: goal?.title ?? '' }]);
 
   if (isSessionRoute) {
     return <Outlet />;
@@ -53,14 +55,6 @@ function GoalDetailPage() {
 
   return (
     <div className="space-y-6">
-      <Link
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition-colors hover:text-gray-900"
-        to="/goals"
-      >
-        <ArrowLeft size={15} />
-        返回
-      </Link>
-
       <section className="rounded-lg border border-gray-200 bg-white p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 max-w-2xl flex-1">

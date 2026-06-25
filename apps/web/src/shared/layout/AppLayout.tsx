@@ -1,6 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router';
-import { BookOpen, LayoutDashboard, PanelLeft } from 'lucide-react';
-import { type ReactNode, useState } from 'react';
+import { ArrowLeft, BookOpen, ChevronRight, LayoutDashboard, PanelLeft } from 'lucide-react';
+import { type ReactNode, useCallback, useMemo, useState } from 'react';
+import { BreadcrumbContext, type BreadcrumbItem } from './BreadcrumbContext';
 
 interface AppLayoutProps {
   children: ReactNode;
@@ -14,6 +15,26 @@ const navItems = [
 export function AppLayout({ children }: AppLayoutProps) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [collapsed, setCollapsed] = useState(false);
+  const [registrations, setRegistrations] = useState<{ id: number; items: BreadcrumbItem[] }[]>([]);
+
+  const push = useCallback((id: number, items: BreadcrumbItem[]) => {
+    setRegistrations((prev) => [...prev, { id, items }]);
+  }, []);
+
+  const update = useCallback((id: number, items: BreadcrumbItem[]) => {
+    setRegistrations((prev) => prev.map((r) => (r.id === id ? { id, items } : r)));
+  }, []);
+
+  const pop = useCallback((id: number) => {
+    setRegistrations((prev) => prev.filter((r) => r.id !== id));
+  }, []);
+
+  const ctxValue = useMemo(() => ({ push, update, pop }), [push, update, pop]);
+
+  const breadcrumbs = registrations.at(-1)?.items ?? [];
+  const defaultLabel =
+    pathname === '/' ? '工作台' : pathname.startsWith('/goals') ? '学习目标' : 'PathMind';
+  const backHref = breadcrumbs.length > 1 ? breadcrumbs[breadcrumbs.length - 2].href : undefined;
 
   return (
     <div className="flex h-dvh bg-white">
@@ -92,14 +113,42 @@ export function AppLayout({ children }: AppLayoutProps) {
       </aside>
 
       <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-14 shrink-0 items-center bg-white px-6">
-          <p className="text-sm text-slate-500">
-            {pathname === '/' ? '工作台' : pathname.startsWith('/goals') ? '学习目标' : 'PathMind'}
-          </p>
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-gray-100 bg-white px-6">
+          {backHref && (
+            <Link
+              to={backHref}
+              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+            >
+              <ArrowLeft size={15} />
+            </Link>
+          )}
+          {breadcrumbs.length > 0 ? (
+            <nav className="flex min-w-0 items-center gap-1">
+              {breadcrumbs.map((item, idx) => (
+                <span key={idx} className="flex items-center gap-1">
+                  {idx > 0 && <ChevronRight size={13} className="shrink-0 text-gray-300" />}
+                  {item.href ? (
+                    <Link
+                      to={item.href}
+                      className="truncate text-sm text-gray-400 transition-colors hover:text-gray-700"
+                    >
+                      {item.label}
+                    </Link>
+                  ) : (
+                    <span className="truncate text-sm font-medium text-gray-800">{item.label}</span>
+                  )}
+                </span>
+              ))}
+            </nav>
+          ) : (
+            <p className="text-sm text-slate-500">{defaultLabel}</p>
+          )}
         </header>
 
         <main className="flex-1 overflow-y-auto bg-white">
-          <div className="mx-auto max-w-5xl px-8 py-8">{children}</div>
+          <BreadcrumbContext value={ctxValue}>
+            <div className="mx-auto max-w-5xl px-8 py-8">{children}</div>
+          </BreadcrumbContext>
         </main>
       </div>
     </div>

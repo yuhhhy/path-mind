@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
-import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { CheckCircle2 } from 'lucide-react';
 import { ChatPanel } from '../features/chat/ChatPanel';
 import { completeStep } from '../features/goal/api';
 import { mockGoals } from '../features/goal/mockGoals';
 import { goalQueryOptions, goalsQueryOptions } from '../features/goal/queries';
+import { useBreadcrumb } from '../shared/layout/BreadcrumbContext';
 
 export const Route = createFileRoute('/goals/$goalId/session/$stepId')({
   component: LearningSessionPage,
@@ -28,6 +29,12 @@ function LearningSessionPage() {
     },
   });
   const step = goal?.steps.find((item) => item.id === stepId);
+
+  useBreadcrumb([
+    { label: '学习目标', href: '/goals' },
+    { label: goal?.title ?? '', href: `/goals/${goalId}` },
+    { label: step?.title ?? '' },
+  ]);
 
   if (!goal || !step) {
     return (
@@ -58,15 +65,6 @@ function LearningSessionPage() {
 
   return (
     <div className="space-y-5">
-      <Link
-        className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition-colors hover:text-gray-900"
-        to="/goals/$goalId"
-        params={{ goalId: goal.id }}
-      >
-        <ArrowLeft size={15} />
-        返回目标
-      </Link>
-
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
         <ChatPanel goal={goal} step={step} />
 
