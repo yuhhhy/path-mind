@@ -23,27 +23,28 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
     step.status === 'done' ? '已完成' : step.status === 'learning' ? '学习中' : '待开始';
 
   return (
-    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-      <div className="mb-5 border-b border-slate-100 pb-5">
+    <section className="rounded-lg border border-gray-200 bg-white p-6">
+      <div className="mb-5 border-b border-gray-100 pb-5">
         <div className="flex items-center gap-2">
-          <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
+          <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
             {statusLabel}
           </span>
-          <span className="text-xs text-slate-400">{goal.title}</span>
+          <span className="text-xs text-gray-400">{goal.title}</span>
         </div>
-        <h2 className="mt-3 text-lg font-semibold text-slate-900">{step.title}</h2>
-        <p className="mt-1 text-sm leading-6 text-slate-500">{step.description}</p>
+        <h2 className="mt-3 text-lg font-semibold text-gray-900">{step.title}</h2>
+        <p className="mt-1 text-sm leading-relaxed text-gray-500">{step.description}</p>
       </div>
 
       <div className="space-y-4">
-        <div className="max-w-3xl rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">
+        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+          <p className="mb-1.5 text-xs font-medium uppercase tracking-wider text-gray-400">
             学习意图
           </p>
-          {step.description}
+          <p className="text-sm leading-relaxed text-gray-600">{step.description}</p>
         </div>
-        <div className="max-w-3xl rounded-lg border border-slate-200 bg-white p-5 text-sm leading-7 text-slate-700 [&_ol]:mt-3 [&_ol]:list-decimal [&_ol]:space-y-1.5 [&_ol]:pl-5 [&_p+p]:mt-3 [&_strong]:font-semibold [&_strong]:text-slate-900">
-          <p className="text-xs font-medium uppercase tracking-wide text-slate-400 mb-2">
+
+        <div className="rounded-lg border border-gray-200 bg-white p-5 text-sm leading-7 text-gray-700 [&_ol]:mt-3 [&_ol]:list-decimal [&_ol]:space-y-1.5 [&_ol]:pl-5 [&_p+p]:mt-3 [&_strong]:font-semibold [&_strong]:text-gray-900">
+          <p className="mb-2 text-xs font-medium uppercase tracking-wider text-gray-400">
             学习笔记
           </p>
           <ReactMarkdown>{demoReply}</ReactMarkdown>

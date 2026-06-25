@@ -1,94 +1,176 @@
 import { Link, createFileRoute } from '@tanstack/react-router';
-import { GoalCard } from '../features/goal/GoalCard';
+import { ArrowUpRight, Clock, FolderOpen, Plus, Target } from 'lucide-react';
 import { useGoalStore } from '../features/goal/goalStore';
 
 export const Route = createFileRoute('/')({
   component: DashboardPage,
 });
 
+const typeLabel: Record<string, string> = {
+  understand_concept: '理解概念',
+  prepare_interview: '面试准备',
+  build_project: '构建项目',
+  pass_exam: '通过考试',
+};
+
+const statusConfig: Record<string, { label: string; className: string }> = {
+  active: { label: '进行中', className: 'text-slate-700 bg-slate-100' },
+  completed: { label: '已完成', className: 'text-green-700 bg-green-50' },
+  paused: { label: '已暂停', className: 'text-slate-500 bg-slate-100' },
+};
+
 function DashboardPage() {
   const goals = useGoalStore((state) => state.goals);
-  const activeGoal = goals.find((g) => g.status === 'active');
-  const completedSteps = activeGoal
-    ? activeGoal.steps.filter((s) => s.status === 'done').length
-    : 0;
-  const totalSteps = activeGoal?.steps.length ?? 0;
 
   return (
     <div className="space-y-8">
-      <section>
-        <h2 className="text-2xl font-semibold tracking-tight text-slate-900">学习工作台</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-500">
+      {/* Page header */}
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight text-slate-900">工作台</h1>
+        <p className="mt-1 text-sm text-slate-500">
           围绕目标规划路径、完成学习步骤，并通过复述和练习验证理解。
         </p>
+      </div>
+
+      {/* Goal tracking section */}
+      <section>
+        <div className="mb-3 flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Target size={15} className="text-slate-500" />
+            <h2 className="text-sm font-semibold text-slate-800">目标追踪</h2>
+          </div>
+          <div className="h-4 w-px bg-slate-200" />
+          <span className="inline-flex items-center gap-1.5 text-xs text-slate-400">
+            <Clock size={12} />
+            最近 7 天
+          </span>
+          <Link
+            className="ml-auto text-xs font-medium text-slate-500 transition-colors hover:text-slate-700"
+            to="/goals"
+          >
+            查看全部
+          </Link>
+        </div>
+
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          {goals.length === 0 ? (
+            <div className="py-16 text-center">
+              <Target size={32} className="mx-auto text-slate-300" />
+              <p className="mt-3 text-sm font-medium text-slate-700">还没有学习目标</p>
+              <p className="mt-1 text-xs text-slate-400">新建一个目标，开始你的学习之旅。</p>
+              <div className="mt-5 flex items-center justify-center">
+                <Link
+                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-3.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+                  to="/goals"
+                >
+                  + 新建目标
+                </Link>
+              </div>
+            </div>
+          ) : (
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b border-slate-100">
+                  <th className="px-5 py-3 text-left text-xs font-medium text-slate-500">
+                    目标名称
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">类型</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">
+                    完成步骤
+                  </th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">进度</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-slate-500">状态</th>
+                  <th className="px-4 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                {goals.map((goal, idx) => {
+                  const done = goal.steps.filter((s) => s.status === 'done').length;
+                  const status = statusConfig[goal.status] ?? statusConfig.paused;
+                  return (
+                    <tr
+                      key={goal.id}
+                      className={idx < goals.length - 1 ? 'border-b border-slate-100' : ''}
+                    >
+                      <td className="px-5 py-3.5">
+                        <span className="font-medium text-slate-800">{goal.title}</span>
+                      </td>
+                      <td className="px-4 py-3.5 text-slate-500">
+                        {typeLabel[goal.type] ?? goal.type}
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span className="inline-flex h-6 min-w-[28px] items-center justify-center rounded bg-slate-100 px-1.5 text-xs font-medium text-slate-600">
+                          {done}
+                        </span>
+                        <span className="ml-1.5 text-slate-400">/ {goal.steps.length}</span>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <div className="flex items-center gap-2">
+                          <div className="h-1.5 w-24 overflow-hidden rounded-full bg-slate-100">
+                            <div
+                              className="h-full rounded-full bg-slate-400 transition-all"
+                              style={{ width: `${goal.progress}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-slate-500">{goal.progress}%</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3.5">
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-xs font-medium ${status.className}`}
+                        >
+                          {status.label}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3.5 text-right">
+                        <Link
+                          className="inline-flex h-7 items-center gap-1 rounded-md bg-blue-600 px-2.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+                          params={{ goalId: goal.id }}
+                          to="/goals/$goalId"
+                        >
+                          继续学习
+                          <ArrowUpRight size={12} />
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
       </section>
 
-      {activeGoal && (
-        <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-          <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0 flex-1">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">当前目标</p>
-              <h3 className="mt-1 text-lg font-semibold text-slate-900">{activeGoal.title}</h3>
-              <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">
-                {activeGoal.description}
-              </p>
+      {/* My data section */}
+      <section>
+        <div className="mb-3 flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <FolderOpen size={15} className="text-slate-500" />
+            <h2 className="text-sm font-semibold text-slate-800">我的数据</h2>
+          </div>
+          <div className="h-4 w-px bg-slate-200" />
+          <span className="text-[12px] text-slate-400">上传文档，让 AI 基于你的资料学习</span>
+        </div>
 
-              <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-500">
-                <span>进度 {activeGoal.progress}%</span>
-                <span>
-                  已完成 {completedSteps}/{totalSteps} 步
-                </span>
-                <span>
-                  预计剩余{' '}
-                  {activeGoal.estimatedMinutes -
-                    Math.round((activeGoal.progress / 100) * activeGoal.estimatedMinutes)}{' '}
-                  分钟
-                </span>
-              </div>
-
-              <div className="mt-3 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-slate-100">
-                <div
-                  className="h-full rounded-full bg-sky-600 transition-all duration-500"
-                  style={{ width: `${activeGoal.progress}%` }}
-                />
-              </div>
-            </div>
-
-            <div className="flex shrink-0 items-start gap-2">
-              <Link
-                className="inline-flex min-h-10 items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-700"
-                to="/goals/$goalId"
-                params={{ goalId: activeGoal.id }}
+        <div className="overflow-hidden rounded-lg border border-slate-200 bg-white">
+          <div className="py-16 text-center">
+            <FolderOpen size={32} className="mx-auto text-slate-300" />
+            <p className="mt-3 text-sm font-medium text-slate-700">暂无上传的文档</p>
+            <p className="mt-1 text-xs text-slate-400">
+              上传 PDF、笔记等资料，AI 将基于内容为你出题和解析。
+            </p>
+            <div className="mt-5 flex items-center justify-center">
+              <button
+                className="inline-flex h-7 items-center gap-1 rounded-md bg-blue-600 px-2.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+                type="button"
               >
-                继续学习
-              </Link>
-              <Link
-                className="inline-flex min-h-10 items-center justify-center rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 transition hover:border-slate-300 hover:text-slate-900"
-                to="/goals/$goalId"
-                params={{ goalId: activeGoal.id }}
-              >
-                查看路径
-              </Link>
+                <Plus size={12} />
+                <span className="text-xs">上传文档</span>
+              </button>
             </div>
           </div>
-        </section>
-      )}
-
-      {goals.length > 0 && (
-        <section>
-          <div className="mb-4 flex items-center justify-between">
-            <h3 className="text-sm font-medium text-slate-500">所有目标</h3>
-            <span className="rounded-full bg-white px-2.5 py-0.5 text-xs font-medium text-slate-500 shadow-sm ring-1 ring-slate-200">
-              {goals.length} 个
-            </span>
-          </div>
-          <div className="grid gap-4">
-            {goals.map((goal) => (
-              <GoalCard goal={goal} key={goal.id} />
-            ))}
-          </div>
-        </section>
-      )}
+        </div>
+      </section>
     </div>
   );
 }

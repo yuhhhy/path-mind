@@ -16,13 +16,13 @@ function LearningSessionPage() {
 
   if (!goal || !step) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-slate-600">没有找到这个学习 Session。</p>
+      <div className="rounded-lg border border-gray-200 bg-white p-6">
+        <p className="text-sm text-gray-600">没有找到这个学习 Session。</p>
         <Link
-          className="mt-4 inline-flex min-h-11 items-center text-sm font-medium text-sky-700"
+          className="mt-4 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700"
           to="/"
         >
-          返回 Dashboard
+          返回工作台
         </Link>
       </div>
     );
@@ -43,60 +43,60 @@ function LearningSessionPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       <Link
-        className="inline-flex min-h-10 items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 hover:text-slate-900"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition-colors hover:text-gray-900"
         to="/goals/$goalId"
         params={{ goalId: goal.id }}
       >
-        <ArrowLeft size={16} />
-        返回 Goal
+        <ArrowLeft size={15} />
+        返回目标
       </Link>
 
-      <div className="grid gap-6 lg:grid-cols-[1fr_240px]">
+      <div className="grid gap-5 lg:grid-cols-[1fr_220px]">
         <ChatPanel goal={goal} step={step} />
 
-        <aside className="space-y-4 lg:sticky lg:top-28 lg:self-start">
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">当前进度</p>
-            <div className="mt-2">
+        <aside className="space-y-3 lg:sticky lg:top-6 lg:self-start">
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-gray-400">当前进度</p>
+            <div className="mt-2.5">
               <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-slate-700">{goal.title}</span>
-                <span className="text-slate-500">{goal.progress}%</span>
+                <span className="font-medium text-gray-700 truncate pr-2">{goal.title}</span>
+                <span className="shrink-0 text-gray-500">{goal.progress}%</span>
               </div>
-              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-slate-100">
+              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-gray-100">
                 <div
-                  className="h-full rounded-full bg-sky-600 transition-all duration-500"
+                  className="h-full rounded-full bg-blue-600 transition-all duration-500"
                   style={{ width: goal.progress + '%' }}
                 />
               </div>
             </div>
-            <p className="mt-2 text-xs text-slate-400">
+            <p className="mt-2 text-xs text-gray-400">
               {completedSteps}/{goal.steps.length} 步完成
             </p>
           </div>
 
-          <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">验证方式</p>
-            <p className="mt-1 text-sm text-slate-600">
+          <div className="rounded-lg border border-gray-200 bg-white p-4">
+            <p className="text-xs font-medium uppercase tracking-wider text-gray-400">验证方式</p>
+            <p className="mt-1.5 text-sm text-gray-600">
               {goal.learningConfig.assessmentMethods.map((m) => assessmentLabel[m] ?? m).join('、')}
             </p>
           </div>
 
           {nextStep && (
-            <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-              <p className="text-xs font-medium uppercase tracking-wide text-slate-400">下一步</p>
-              <p className="mt-1 text-sm font-medium text-slate-800">{nextStep.title}</p>
+            <div className="rounded-lg border border-gray-200 bg-white p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-gray-400">下一步</p>
+              <p className="mt-1.5 text-sm font-medium text-gray-800">{nextStep.title}</p>
             </div>
           )}
 
           <button
-            className="inline-flex w-full min-h-10 items-center justify-center gap-2 rounded-lg border border-slate-900 bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-700 hover:border-sky-700 disabled:cursor-not-allowed disabled:border-slate-200 disabled:bg-slate-100 disabled:text-slate-400"
+            className="inline-flex w-full h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
             disabled={step.status === 'done'}
             onClick={handleCompleteStep}
             type="button"
           >
-            <CheckCircle2 size={16} />
+            <CheckCircle2 size={15} />
             {step.status === 'done' ? '已完成' : '标记本节完成'}
           </button>
         </aside>

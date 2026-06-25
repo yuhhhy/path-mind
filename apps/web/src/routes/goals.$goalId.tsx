@@ -20,13 +20,13 @@ function GoalDetailPage() {
 
   if (!goal) {
     return (
-      <div className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-slate-600">没有找到这个 Goal。</p>
+      <div className="rounded-lg border border-gray-200 bg-white p-6">
+        <p className="text-sm text-gray-600">没有找到这个 Goal。</p>
         <Link
-          className="mt-4 inline-flex min-h-11 items-center text-sm font-medium text-sky-700"
+          className="mt-4 inline-flex items-center text-sm font-medium text-blue-600 hover:text-blue-700"
           to="/"
         >
-          返回 Dashboard
+          返回工作台
         </Link>
       </div>
     );
@@ -50,46 +50,43 @@ function GoalDetailPage() {
   return (
     <div className="space-y-6">
       <Link
-        className="inline-flex min-h-10 items-center gap-2 rounded-lg px-1 text-sm font-medium text-slate-500 hover:text-slate-900"
-        to="/"
+        className="inline-flex items-center gap-1.5 text-sm font-medium text-gray-500 transition-colors hover:text-gray-900"
+        to="/goals"
       >
-        <ArrowLeft size={16} />
+        <ArrowLeft size={15} />
         返回
       </Link>
 
-      <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <section className="rounded-lg border border-gray-200 bg-white p-6">
         <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
           <div className="min-w-0 max-w-2xl flex-1">
-            <p className="text-xs font-medium uppercase tracking-wide text-slate-400">目标详情</p>
-            <h2 className="mt-1 text-xl font-semibold tracking-tight text-slate-900">
-              {goal.title}
-            </h2>
-            <p className="mt-2 text-sm leading-6 text-slate-500">{goal.description}</p>
+            <p className="text-xs font-medium uppercase tracking-wider text-gray-400">目标详情</p>
+            <h1 className="mt-1.5 text-xl font-bold tracking-tight text-gray-900">{goal.title}</h1>
+            <p className="mt-2 text-sm leading-relaxed text-gray-500">{goal.description}</p>
 
-            <div className="mt-4 flex flex-wrap items-center gap-x-6 gap-y-2 text-sm text-slate-500">
+            <div className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-1.5 text-sm text-gray-500">
               <span>
-                状态：
                 {goal.status === 'active'
                   ? '进行中'
                   : goal.status === 'completed'
                     ? '已完成'
                     : '暂停'}
               </span>
-              <span>进度：{goal.progress}%</span>
+              <span>进度 {goal.progress}%</span>
               <span>
-                已完成：{completedSteps}/{goal.steps.length} 步
+                {completedSteps}/{goal.steps.length} 步完成
               </span>
-              <span>预计总时长：{goal.estimatedMinutes} 分钟</span>
+              <span>预计 {goal.estimatedMinutes} 分钟</span>
             </div>
 
-            <div className="mt-3 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-slate-100">
+            <div className="mt-3 h-1.5 w-full max-w-xs overflow-hidden rounded-full bg-gray-100">
               <div
-                className="h-full rounded-full bg-sky-600 transition-all duration-500"
+                className="h-full rounded-full bg-blue-600 transition-all duration-500"
                 style={{ width: `${goal.progress}%` }}
               />
             </div>
 
-            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-400">
+            <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-400">
               <span>
                 教学策略：
                 {strategyLabel[goal.learningConfig.teachingStrategy] ??
@@ -105,7 +102,7 @@ function GoalDetailPage() {
           </div>
 
           <div className="shrink-0">
-            <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-500">
+            <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-1 text-xs font-medium text-gray-600">
               {goal.type === 'understand_concept'
                 ? '理解概念'
                 : goal.type === 'prepare_interview'
@@ -118,22 +115,22 @@ function GoalDetailPage() {
         </div>
       </section>
 
-      <section className="grid gap-6 lg:grid-cols-[1fr_280px]">
-        <div>
-          <h3 className="mb-4 text-base font-semibold text-slate-900">学习路径</h3>
+      <section className="space-y-3">
+        <p className="text-xs font-medium uppercase tracking-wider text-gray-400">学习路径</p>
+        <div className="grid gap-6 lg:grid-cols-[1fr_260px] lg:items-start">
           <LearningPath goal={goal} />
+          <aside className="rounded-lg border border-gray-200 bg-white p-5 lg:sticky lg:top-6">
+            <p className="text-xs font-medium uppercase tracking-wider text-gray-400">最终成果</p>
+            <ul className="mt-3 space-y-2.5">
+              {goal.finalOutcome.map((outcome) => (
+                <li className="flex gap-2 text-sm leading-relaxed text-gray-600" key={outcome}>
+                  <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-gray-300" />
+                  <span>{outcome}</span>
+                </li>
+              ))}
+            </ul>
+          </aside>
         </div>
-        <aside className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:sticky lg:top-28 lg:self-start lg:mt-10">
-          <h3 className="text-sm font-semibold text-slate-900">最终成果</h3>
-          <ul className="mt-3 space-y-2.5 text-sm leading-6 text-slate-500">
-            {goal.finalOutcome.map((outcome) => (
-              <li className="flex gap-2" key={outcome}>
-                <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-slate-300" />
-                <span>{outcome}</span>
-              </li>
-            ))}
-          </ul>
-        </aside>
       </section>
     </div>
   );

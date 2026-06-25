@@ -10,12 +10,18 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as GoalsIndexRouteImport } from './routes/goals.index'
 import { Route as GoalsGoalIdRouteImport } from './routes/goals.$goalId'
 import { Route as GoalsGoalIdSessionStepIdRouteImport } from './routes/goals.$goalId.session.$stepId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const GoalsIndexRoute = GoalsIndexRouteImport.update({
+  id: '/goals/',
+  path: '/goals/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const GoalsGoalIdRoute = GoalsGoalIdRouteImport.update({
@@ -33,30 +39,43 @@ const GoalsGoalIdSessionStepIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/goals/$goalId': typeof GoalsGoalIdRouteWithChildren
+  '/goals/': typeof GoalsIndexRoute
   '/goals/$goalId/session/$stepId': typeof GoalsGoalIdSessionStepIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/goals/$goalId': typeof GoalsGoalIdRouteWithChildren
+  '/goals': typeof GoalsIndexRoute
   '/goals/$goalId/session/$stepId': typeof GoalsGoalIdSessionStepIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/goals/$goalId': typeof GoalsGoalIdRouteWithChildren
+  '/goals/': typeof GoalsIndexRoute
   '/goals/$goalId/session/$stepId': typeof GoalsGoalIdSessionStepIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/goals/$goalId' | '/goals/$goalId/session/$stepId'
+  fullPaths:
+    | '/'
+    | '/goals/$goalId'
+    | '/goals/'
+    | '/goals/$goalId/session/$stepId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/goals/$goalId' | '/goals/$goalId/session/$stepId'
-  id: '__root__' | '/' | '/goals/$goalId' | '/goals/$goalId/session/$stepId'
+  to: '/' | '/goals/$goalId' | '/goals' | '/goals/$goalId/session/$stepId'
+  id:
+    | '__root__'
+    | '/'
+    | '/goals/$goalId'
+    | '/goals/'
+    | '/goals/$goalId/session/$stepId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   GoalsGoalIdRoute: typeof GoalsGoalIdRouteWithChildren
+  GoalsIndexRoute: typeof GoalsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -66,6 +85,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/goals/': {
+      id: '/goals/'
+      path: '/goals'
+      fullPath: '/goals/'
+      preLoaderRoute: typeof GoalsIndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/goals/$goalId': {
@@ -100,6 +126,7 @@ const GoalsGoalIdRouteWithChildren = GoalsGoalIdRoute._addFileChildren(
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   GoalsGoalIdRoute: GoalsGoalIdRouteWithChildren,
+  GoalsIndexRoute: GoalsIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

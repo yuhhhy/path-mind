@@ -1,7 +1,6 @@
 @import 'tailwindcss';
 
 :root {
-  background: #eef4ff;
   font-family:
     Inter,
     ui-sans-serif,
@@ -18,15 +17,12 @@
   box-sizing: border-box;
 }
 
-html {
-  background: linear-gradient(180deg, #f6f9ff 0%, #eef4ff 48%, #f8fafc 100%);
-}
-
+html,
 body {
-  min-width: 320px;
+  height: 100%;
   margin: 0;
-  color: #0f172a;
-  background: transparent;
+  background: #ffffff;
+  color: #111827;
   text-rendering: optimizeLegibility;
 }
 
@@ -35,8 +31,8 @@ a {
 }
 
 :where(a, button):focus-visible {
-  outline: 2px solid rgba(2, 132, 199, 0.4);
-  outline-offset: 3px;
+  outline: 2px solid rgba(37, 99, 235, 0.4);
+  outline-offset: 2px;
 }
 
 button {

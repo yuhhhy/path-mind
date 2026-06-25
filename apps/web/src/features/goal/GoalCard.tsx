@@ -18,18 +18,20 @@ export function GoalCard({ goal }: GoalCardProps) {
   const totalSteps = goal.steps.length;
 
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm transition duration-200 hover:border-slate-300 hover:shadow-md">
-      <div className="flex flex-col gap-4">
+    <article className="rounded-lg border border-gray-200 bg-white p-5 transition-colors hover:border-gray-300">
+      <div className="flex flex-col gap-3">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <p className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
+            <span className="inline-flex rounded-full bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-600">
               {typeLabel[goal.type] ?? goal.type}
+            </span>
+            <h2 className="mt-2 text-sm font-semibold text-gray-900">{goal.title}</h2>
+            <p className="mt-1 text-sm leading-relaxed text-gray-500 line-clamp-2">
+              {goal.description}
             </p>
-            <h2 className="mt-2 text-base font-semibold text-slate-900">{goal.title}</h2>
-            <p className="mt-1 text-sm leading-6 text-slate-500 line-clamp-2">{goal.description}</p>
           </div>
           <Link
-            className="inline-flex min-h-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-sky-700"
+            className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-blue-600 px-3.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
             to="/goals/$goalId"
             params={{ goalId: goal.id }}
           >
@@ -37,9 +39,9 @@ export function GoalCard({ goal }: GoalCardProps) {
           </Link>
         </div>
 
-        <div className="flex items-center gap-4 text-xs text-slate-400">
-          <span className="inline-flex items-center gap-1.5">
-            <Clock3 size={14} />
+        <div className="flex items-center gap-4 text-xs text-gray-400">
+          <span className="inline-flex items-center gap-1">
+            <Clock3 size={13} />
             {goal.estimatedMinutes} 分钟
           </span>
           <span>
@@ -48,9 +50,9 @@ export function GoalCard({ goal }: GoalCardProps) {
           <span>{goal.progress}%</span>
         </div>
 
-        <div className="h-1 overflow-hidden rounded-full bg-slate-100">
+        <div className="h-1 overflow-hidden rounded-full bg-gray-100">
           <div
-            className="h-full rounded-full bg-sky-600 transition-all duration-500"
+            className="h-full rounded-full bg-blue-600 transition-all duration-500"
             style={{ width: `${goal.progress}%` }}
           />
         </div>
