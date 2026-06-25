@@ -1,8 +1,9 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { ArrowUpRight, Clock, FolderOpen, Plus, Sparkles, Target } from 'lucide-react';
-import { generateLearningPath } from '../features/goal/api';
-import { useGoalStore } from '../features/goal/goalStore';
+import { generateAndSaveLearningPath } from '../features/goal/api';
+import { mockGoals } from '../features/goal/mockGoals';
+import { goalsQueryOptions } from '../features/goal/queries';
 import type { GenerateLearningPathInput } from '../features/goal/types';
 
 export const Route = createFileRoute('/')({
@@ -24,8 +25,10 @@ const statusConfig: Record<string, { label: string; className: string }> = {
 
 function DashboardPage() {
   const navigate = useNavigate();
-  const goals = useGoalStore((state) => state.goals);
-  const createGoalFromGeneratedPath = useGoalStore((state) => state.createGoalFromGeneratedPath);
+  const queryClient = useQueryClient();
+  const goalsOptions = goalsQueryOptions();
+  const goalsQuery = useQuery(goalsOptions);
+  const goals = goalsQuery.data ?? (goalsQuery.isError ? mockGoals : []);
 
   const defaultAiGoalInput: GenerateLearningPathInput = {
     goalTitle: '学会从输入 URL 到浏览器渲染',
@@ -38,9 +41,9 @@ function DashboardPage() {
   };
 
   const createGoalMutation = useMutation({
-    mutationFn: generateLearningPath,
-    onSuccess(output, input) {
-      const goal = createGoalFromGeneratedPath(input, output);
+    mutationFn: generateAndSaveLearningPath,
+    onSuccess(goal) {
+      void queryClient.invalidateQueries({ queryKey: goalsOptions.queryKey });
       void navigate({ to: '/goals/$goalId', params: { goalId: goal.id } });
     },
   });

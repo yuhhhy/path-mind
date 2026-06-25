@@ -4,6 +4,7 @@ export const envSchema = z
   .object({
     NODE_ENV: z.string().optional(),
     PORT: z.coerce.number().default(3001),
+    DATABASE_URL: z.string().optional(),
     OPENAI_API_KEY: z.string().optional(),
     OPENAI_BASE_URL: z.string().url().optional(),
     OPENAI_MODEL: z.string().default('gpt-4.1-mini'),

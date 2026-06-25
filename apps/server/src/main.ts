@@ -1,5 +1,6 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module.js';
+import { setupOpenApi } from './openapi/swagger.js';
 
 const app = await NestFactory.create(AppModule);
 
@@ -17,5 +18,7 @@ app.enableCors({
     callback(new Error('Not allowed by CORS'));
   },
 });
+
+setupOpenApi(app);
 
 await app.listen(process.env.PORT ? Number(process.env.PORT) : 3001);

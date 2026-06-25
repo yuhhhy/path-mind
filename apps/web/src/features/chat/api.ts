@@ -1,4 +1,4 @@
-import type { ChatSessionInput } from '@pathmind/shared';
+import type { ChatMessage, ChatSessionInput } from '@pathmind/shared';
 import { parseSseEvent } from './sse';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
@@ -9,8 +9,25 @@ interface StreamChatCallbacks {
   onError(error: Error): void;
 }
 
+export interface StreamChatSessionInput extends ChatSessionInput {
+  userMessage?: string;
+}
+
+export async function getChatSession(
+  goalId: string,
+  stepId: string,
+): Promise<{ messages: ChatMessage[] }> {
+  const response = await fetch(`${API_BASE_URL}/chat/session?goalId=${goalId}&stepId=${stepId}`);
+
+  if (!response.ok) {
+    throw new Error('AI 服务暂时不可用，请检查后端服务或数据库。');
+  }
+
+  return response.json() as Promise<{ messages: ChatMessage[] }>;
+}
+
 export async function streamChatSession(
-  input: ChatSessionInput,
+  input: StreamChatSessionInput,
   callbacks: StreamChatCallbacks,
   signal?: AbortSignal,
 ) {

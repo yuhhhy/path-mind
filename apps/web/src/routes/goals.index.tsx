@@ -1,6 +1,8 @@
+import { useQuery } from '@tanstack/react-query';
 import { Link, createFileRoute } from '@tanstack/react-router';
 import { Clock3, Plus } from 'lucide-react';
-import { useGoalStore } from '../features/goal/goalStore';
+import { mockGoals } from '../features/goal/mockGoals';
+import { goalsQueryOptions } from '../features/goal/queries';
 
 export const Route = createFileRoute('/goals/')({
   component: GoalsPage,
@@ -14,7 +16,8 @@ const typeLabel: Record<string, string> = {
 };
 
 function GoalsPage() {
-  const goals = useGoalStore((state) => state.goals);
+  const goalsQuery = useQuery(goalsQueryOptions());
+  const goals = goalsQuery.data ?? (goalsQuery.isError ? mockGoals : []);
 
   return (
     <div className="space-y-6">

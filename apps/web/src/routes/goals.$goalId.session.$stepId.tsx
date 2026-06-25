@@ -1,7 +1,10 @@
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { ChatPanel } from '../features/chat/ChatPanel';
-import { useGoalStore } from '../features/goal/goalStore';
+import { completeStep } from '../features/goal/api';
+import { mockGoals } from '../features/goal/mockGoals';
+import { goalQueryOptions, goalsQueryOptions } from '../features/goal/queries';
 
 export const Route = createFileRoute('/goals/$goalId/session/$stepId')({
   component: LearningSessionPage,
@@ -9,9 +12,21 @@ export const Route = createFileRoute('/goals/$goalId/session/$stepId')({
 
 function LearningSessionPage() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { goalId, stepId } = Route.useParams();
-  const goal = useGoalStore((state) => state.getGoalById(goalId));
-  const completeStep = useGoalStore((state) => state.completeStep);
+  const fallbackGoal = mockGoals.find((item) => item.id === goalId);
+  const goalOptions = goalQueryOptions(goalId);
+  const goalsOptions = goalsQueryOptions();
+  const goalQuery = useQuery(goalOptions);
+  const goal = goalQuery.data ?? (goalQuery.isError ? fallbackGoal : undefined);
+  const completeStepMutation = useMutation({
+    mutationFn: () => completeStep(goalId, stepId),
+    onSuccess(updatedGoal) {
+      queryClient.setQueryData(goalOptions.queryKey, updatedGoal);
+      void queryClient.invalidateQueries({ queryKey: goalsOptions.queryKey });
+      void navigate({ to: '/goals/$goalId', params: { goalId: updatedGoal.id } });
+    },
+  });
   const step = goal?.steps.find((item) => item.id === stepId);
 
   if (!goal || !step) {
@@ -29,8 +44,7 @@ function LearningSessionPage() {
   }
 
   const handleCompleteStep = () => {
-    completeStep(goal.id, step.id);
-    void navigate({ to: '/goals/$goalId', params: { goalId: goal.id } });
+    completeStepMutation.mutate();
   };
 
   const completedSteps = goal.steps.filter((s) => s.status === 'done').length;

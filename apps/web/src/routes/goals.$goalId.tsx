@@ -1,7 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
 import { Link, Outlet, createFileRoute, useRouterState } from '@tanstack/react-router';
 import { ArrowLeft } from 'lucide-react';
-import { useGoalStore } from '../features/goal/goalStore';
 import { LearningPath } from '../features/goal/LearningPath';
+import { mockGoals } from '../features/goal/mockGoals';
+import { goalQueryOptions } from '../features/goal/queries';
 
 export const Route = createFileRoute('/goals/$goalId')({
   component: GoalDetailPage,
@@ -12,7 +14,9 @@ function GoalDetailPage() {
   const isSessionRoute = useRouterState({
     select: (state) => state.location.pathname.includes(`/goals/${goalId}/session/`),
   });
-  const goal = useGoalStore((state) => state.getGoalById(goalId));
+  const fallbackGoal = mockGoals.find((item) => item.id === goalId);
+  const goalQuery = useQuery(goalQueryOptions(goalId));
+  const goal = goalQuery.data ?? (goalQuery.isError ? fallbackGoal : undefined);
 
   if (isSessionRoute) {
     return <Outlet />;

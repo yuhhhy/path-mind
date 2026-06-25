@@ -1,8 +1,10 @@
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FormEvent } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
 import type { ChatMessage, Goal, LearningStep } from '../goal/types';
 import { streamChatSession } from './api';
+import { MarkdownMessage } from './MarkdownMessage';
+import { chatSessionQueryOptions } from './queries';
 
 interface ChatPanelProps {
   goal: Goal;
@@ -10,11 +12,21 @@ interface ChatPanelProps {
 }
 
 export function ChatPanel({ goal, step }: ChatPanelProps) {
+  const queryClient = useQueryClient();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [draft, setDraft] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState('');
   const abortRef = useRef<AbortController | null>(null);
+
+  const chatOptions = chatSessionQueryOptions(goal.id, step.id);
+  const chatQuery = useQuery(chatOptions);
+
+  useEffect(() => {
+    if (!isStreaming && chatQuery.data) {
+      setMessages(chatQuery.data.messages);
+    }
+  }, [chatQuery.data, isStreaming]);
 
   useEffect(() => {
     return () => {
@@ -39,23 +51,28 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
     });
   };
 
-  const runSession = async (nextMessages: ChatMessage[]) => {
+  const runSession = async (history: ChatMessage[], userMessage?: string) => {
     abortRef.current?.abort();
 
     const abortController = new AbortController();
+    const visibleMessages = userMessage
+      ? [...history, { role: 'user' as const, content: userMessage }]
+      : history;
+
     abortRef.current = abortController;
     setError('');
     setIsStreaming(true);
-    setMessages([...nextMessages, { role: 'assistant', content: '' }]);
+    setMessages([...visibleMessages, { role: 'assistant', content: '' }]);
 
     await streamChatSession(
-      { goal, step, messages: nextMessages },
+      { goal, step, messages: history, userMessage },
       {
         onDelta(content) {
           appendAssistantDelta(content);
         },
         onDone() {
           setIsStreaming(false);
+          void queryClient.invalidateQueries({ queryKey: chatOptions.queryKey });
         },
         onError(streamError) {
           setError(streamError.message || 'AI 服务暂时不可用，请检查后端服务或 API Key。');
@@ -82,8 +99,9 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
       return;
     }
 
+    const history = messages.filter((message) => message.content.trim().length > 0);
     setDraft('');
-    void runSession([...messages, { role: 'user', content }]);
+    void runSession(history, content);
   };
 
   return (
@@ -100,7 +118,11 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
       </div>
 
       <div className="space-y-4">
-        {messages.length === 0 ? (
+        {chatQuery.isLoading ? (
+          <div className="rounded-lg border border-gray-200 bg-gray-50 p-5 text-sm text-gray-500">
+            正在读取历史教学内容...
+          </div>
+        ) : messages.length === 0 ? (
           <div className="rounded-lg border border-gray-200 bg-gray-50 p-5">
             <p className="text-sm font-medium text-gray-800">准备开始本节 AI 教学</p>
             <p className="mt-1 text-sm leading-relaxed text-gray-500">
@@ -122,13 +144,13 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
                 className={
                   message.role === 'user'
                     ? 'rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-950'
-                    : 'rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm leading-7 text-gray-700 [&_ol]:mt-3 [&_ol]:list-decimal [&_ol]:space-y-1.5 [&_ol]:pl-5 [&_p+p]:mt-3 [&_strong]:font-semibold [&_strong]:text-gray-900 [&_table]:mt-3 [&_td]:border [&_td]:border-gray-200 [&_td]:px-2 [&_td]:py-1 [&_th]:border [&_th]:border-gray-200 [&_th]:px-2 [&_th]:py-1'
+                    : 'rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700'
                 }
                 key={`${message.role}-${index}`}
               >
                 {message.role === 'assistant' ? (
                   message.content ? (
-                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                    <MarkdownMessage content={message.content} />
                   ) : (
                     <p className="text-gray-400">AI 正在组织讲解...</p>
                   )

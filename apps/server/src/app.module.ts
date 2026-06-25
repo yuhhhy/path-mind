@@ -4,6 +4,7 @@ import { AiModule } from './ai/ai.module.js';
 import { AppController } from './app.controller.js';
 import { ChatModule } from './chat/chat.module.js';
 import { envSchema } from './config/env.js';
+import { GoalsModule } from './goals/goals.module.js';
 import { LearningPathModule } from './learning-path/learning-path.module.js';
 
 @Module({
@@ -15,6 +16,7 @@ import { LearningPathModule } from './learning-path/learning-path.module.js';
       },
     }),
     AiModule,
+    GoalsModule,
     LearningPathModule,
     ChatModule,
   ],
