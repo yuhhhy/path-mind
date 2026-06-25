@@ -7,7 +7,7 @@ interface ChatPanelProps {
 }
 
 const demoReply = `
-我们先把这一节放进完整链路里看：输入 URL 后，浏览器不是直接拿到 HTML，而是先把“我要访问哪里”变成一次真实的网络请求。
+我们先把这一节放进完整链路里看：输入 URL 后，浏览器不是直接拿到 HTML，而是先把"我要访问哪里"变成一次真实的网络请求。
 
 **这一节你要抓住三个顺序：**
 
@@ -19,19 +19,33 @@ const demoReply = `
 `;
 
 export function ChatPanel({ goal, step }: ChatPanelProps) {
+  const statusLabel =
+    step.status === 'done' ? '已完成' : step.status === 'learning' ? '学习中' : '待开始';
+
   return (
-    <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-      <div className="border-b border-slate-100 pb-4">
-        <p className="text-sm font-medium text-sky-700">AI Learning Session</p>
-        <h2 className="mt-1 text-xl font-semibold text-slate-950">{step.title}</h2>
-        <p className="mt-2 text-sm text-slate-500">{goal.title}</p>
+    <section className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
+      <div className="mb-5 border-b border-slate-100 pb-5">
+        <div className="flex items-center gap-2">
+          <span className="inline-flex rounded-full bg-slate-100 px-2.5 py-0.5 text-xs font-medium text-slate-500">
+            {statusLabel}
+          </span>
+          <span className="text-xs text-slate-400">{goal.title}</span>
+        </div>
+        <h2 className="mt-3 text-lg font-semibold text-slate-900">{step.title}</h2>
+        <p className="mt-1 text-sm leading-6 text-slate-500">{step.description}</p>
       </div>
 
-      <div className="mt-5 space-y-4">
-        <div className="max-w-3xl rounded-lg bg-slate-100 p-4 text-sm leading-6 text-slate-700">
-          我想学习：{step.description}
+      <div className="space-y-4">
+        <div className="max-w-3xl rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400 mb-1">
+            学习意图
+          </p>
+          {step.description}
         </div>
-        <div className="max-w-3xl rounded-lg bg-sky-50 p-4 text-sm leading-6 text-slate-700">
+        <div className="max-w-3xl rounded-lg border border-slate-200 bg-white p-5 text-sm leading-7 text-slate-700 [&_ol]:mt-3 [&_ol]:list-decimal [&_ol]:space-y-1.5 [&_ol]:pl-5 [&_p+p]:mt-3 [&_strong]:font-semibold [&_strong]:text-slate-900">
+          <p className="text-xs font-medium uppercase tracking-wide text-slate-400 mb-2">
+            学习笔记
+          </p>
           <ReactMarkdown>{demoReply}</ReactMarkdown>
         </div>
       </div>
