@@ -88,12 +88,7 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
   };
 
   const handleStart = () => {
-    void runSession([
-      {
-        role: 'user',
-        content: `请开始当前 Step「${step.title}」的教学。`,
-      },
-    ]);
+    void runSession([], `请开始当前 Step「${step.title}」的教学。`);
   };
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -147,8 +142,8 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
               <div
                 className={
                   message.role === 'user'
-                    ? 'rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-sm text-blue-950'
-                    : 'rounded-lg border border-gray-200 bg-white px-4 py-3 text-sm text-gray-700'
+                    ? 'my-8 rounded-lg border border-orange-200 bg-orange-50 px-4 py-4 font-serif text-sm leading-6 text-orange-900'
+                    : 'px-1 py-3 text-sm text-gray-700'
                 }
                 key={`${message.role}-${index}`}
               >

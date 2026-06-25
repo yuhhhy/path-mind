@@ -67,7 +67,7 @@ function LearningSessionPage() {
         返回目标
       </Link>
 
-      <div className="grid gap-5 lg:grid-cols-[1fr_220px]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
         <ChatPanel goal={goal} step={step} />
 
         <aside className="space-y-3 lg:sticky lg:top-6 lg:self-start">

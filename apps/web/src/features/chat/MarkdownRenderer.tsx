@@ -12,7 +12,7 @@ const components: Components = {
     return (
       <pre
         {...props}
-        className="not-prose my-4 overflow-x-auto rounded-lg border border-slate-700 bg-[#0d1117] p-4 text-[0.8125rem] leading-6"
+        className="not-prose my-4 max-w-full overflow-x-auto rounded-lg border border-slate-700 bg-[#0d1117] p-4 text-[0.8125rem] leading-6 [scrollbar-width:thin] [scrollbar-color:#334155_transparent] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-700 hover:[&::-webkit-scrollbar-thumb]:bg-slate-500"
       >
         {children}
       </pre>
