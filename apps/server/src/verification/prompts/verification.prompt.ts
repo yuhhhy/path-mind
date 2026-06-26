@@ -124,6 +124,8 @@ ${input.userAnswer}
 评判标准：是否表达了核心理解，不要求措辞完美，只要意思准确、关键点覆盖到即可。
 explain_back 考察整体理解，scenario_question 考察知识迁移应用。
 
+feedback 字段如需分点，使用 - 列表。
+
 请严格输出 JSON:
 {
   "isCorrect": boolean,

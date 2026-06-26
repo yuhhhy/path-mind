@@ -1,17 +1,19 @@
+import type { StepVerification } from '@pathmind/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { Brain, CheckCircle2, FileText, GitBranch, ListChecks } from 'lucide-react';
 import type { FormEvent } from 'react';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTrackedMutation } from '../features/ai-generation/useTrackedMutation';
+import { useVisibleAiStream } from '../features/ai-generation/useVisibleAiStream';
 import { ChatPanel } from '../features/chat/ChatPanel';
 import {
   completeStep,
-  generateQuiz,
-  generateStepSummary,
-  generateTransfer,
   submitQuizAttempt,
-  submitTransfer,
+  streamQuiz,
+  streamStepSummary,
+  streamSubmitTransfer,
+  streamTransfer,
 } from '../features/goal/api';
 import { mockGoals } from '../features/goal/mockGoals';
 import {
@@ -78,16 +80,14 @@ function LearningSessionPage() {
     verificationQueryKey: verificationOptions.queryKey,
   };
 
-  const generateQuizMutation = useTrackedMutation({
-    ...trackedArgs,
-    taskId: `step:${stepId}:quiz`,
-    title: '生成综合测验',
-    run: () => generateQuiz({ goalId, stepId }),
-    successDescription: (quiz) => `已生成 ${quiz.questions.length} 道题`,
-    onSuccess(quiz) {
-      setQuizAnswers(Object.fromEntries(quiz.questions.map((question) => [question.id, ''])));
+  const setVerificationCache = useCallback(
+    (updater: (current: StepVerification) => StepVerification) => {
+      queryClient.setQueryData<StepVerification>(verificationOptions.queryKey, (current) =>
+        updater(current ?? { canCompleteStep: false }),
+      );
     },
-  });
+    [queryClient, verificationOptions.queryKey],
+  );
 
   const submitQuizMutation = useTrackedMutation({
     ...trackedArgs,
@@ -106,50 +106,217 @@ function LearningSessionPage() {
     successDescription: '测验批改完成',
   });
 
-  const generateTransferMutation = useTrackedMutation({
-    ...trackedArgs,
-    taskId: `step:${stepId}:transfer`,
-    title: '生成迁移应用题',
-    run: () => generateTransfer({ goalId, stepId }),
-    successDescription: '迁移应用题已生成',
-  });
+  const streamScope = useMemo(() => ({ goalId, stepId }), [goalId, stepId]);
+  const quizTask = useMemo(
+    () => ({
+      id: `step:${stepId}:quiz`,
+      title: '生成综合测验',
+      scope: streamScope,
+    }),
+    [stepId, streamScope],
+  );
+  const transferTask = useMemo(
+    () => ({
+      id: `step:${stepId}:transfer`,
+      title: '生成迁移应用题',
+      scope: streamScope,
+    }),
+    [stepId, streamScope],
+  );
+  const transferReviewTask = useMemo(
+    () => ({
+      id: `step:${stepId}:transfer-review`,
+      title: '评价迁移应用',
+      scope: streamScope,
+    }),
+    [stepId, streamScope],
+  );
+  const summaryTask = useMemo(
+    () => ({
+      id: `step:${stepId}:summary`,
+      title: '生成本节总结',
+      scope: streamScope,
+    }),
+    [stepId, streamScope],
+  );
 
-  const submitTransferMutation = useTrackedMutation({
-    ...trackedArgs,
-    taskId: `step:${stepId}:transfer-review`,
-    title: '评价迁移应用',
-    run: () => submitTransfer({ goalId, stepId, content: transferDraft.trim() }),
-    successDescription: '迁移应用评价完成',
-    onSuccess() {
-      setTransferDraft('');
+  const {
+    error: quizStreamError,
+    isActive: isQuizStreamActive,
+    start: startQuizAiStream,
+  } = useVisibleAiStream({
+    stream: streamQuiz,
+    task: quizTask,
+    doneDescription: (quiz) => (quiz ? `已生成 ${quiz.questions.length} 道题` : '综合测验已生成'),
+    onState(quiz) {
+      setVerificationCache((current) => ({ ...current, quiz }));
+    },
+    onDelta(content) {
+      setVerificationCache((current) => ({
+        ...current,
+        quiz: current.quiz
+          ? {
+              ...current.quiz,
+              status: 'streaming',
+              draftContent: (current.quiz.draftContent ?? '') + content,
+            }
+          : current.quiz,
+      }));
+    },
+    onDone(quiz) {
+      if (quiz) {
+        setQuizAnswers(Object.fromEntries(quiz.questions.map((question) => [question.id, ''])));
+        setVerificationCache((current) => ({ ...current, quiz }));
+      }
+      void queryClient.invalidateQueries({ queryKey: verificationOptions.queryKey });
     },
   });
 
-  const generateSummaryMutation = useTrackedMutation({
-    ...trackedArgs,
-    taskId: `step:${stepId}:summary`,
-    title: '生成本节总结',
-    run: () => generateStepSummary({ goalId, stepId }),
-    successDescription: '本节总结已生成',
+  const {
+    error: transferStreamError,
+    isActive: isTransferStreamActive,
+    start: startTransferAiStream,
+  } = useVisibleAiStream({
+    stream: streamTransfer,
+    task: transferTask,
+    doneDescription: () => '迁移应用题已生成',
+    onState(transfer) {
+      setVerificationCache((current) => ({ ...current, transfer }));
+    },
+    onDelta(content) {
+      setVerificationCache((current) => ({
+        ...current,
+        transfer: current.transfer
+          ? {
+              ...current.transfer,
+              promptStatus: 'streaming',
+              prompt: current.transfer.prompt + content,
+            }
+          : current.transfer,
+      }));
+    },
+    onDone(transfer) {
+      if (transfer) setVerificationCache((current) => ({ ...current, transfer }));
+      void queryClient.invalidateQueries({ queryKey: verificationOptions.queryKey });
+    },
   });
+
+  const {
+    error: transferReviewStreamError,
+    isActive: isTransferReviewStreamActive,
+    start: startTransferReviewAiStream,
+  } = useVisibleAiStream({
+    stream: streamSubmitTransfer,
+    task: transferReviewTask,
+    doneDescription: () => '迁移应用评价完成',
+    onState(transfer) {
+      setVerificationCache((current) => ({ ...current, transfer }));
+    },
+    onDelta(delta) {
+      setVerificationCache((current) => ({
+        ...current,
+        transfer: current.transfer
+          ? {
+              ...current.transfer,
+              feedbackStatus: 'streaming',
+              aiFeedback: (current.transfer.aiFeedback ?? '') + delta,
+            }
+          : current.transfer,
+      }));
+    },
+    onDone(transfer) {
+      setTransferDraft('');
+      if (transfer) setVerificationCache((current) => ({ ...current, transfer }));
+      void queryClient.invalidateQueries({ queryKey: verificationOptions.queryKey });
+    },
+  });
+
+  const {
+    error: summaryStreamError,
+    isActive: isSummaryStreamActive,
+    start: startSummaryAiStream,
+  } = useVisibleAiStream({
+    stream: streamStepSummary,
+    task: summaryTask,
+    doneDescription: () => '本节总结已生成',
+    onState(summary) {
+      setVerificationCache((current) => ({ ...current, summary }));
+    },
+    onDelta(content) {
+      setVerificationCache((current) => ({
+        ...current,
+        summary: current.summary
+          ? {
+              ...current.summary,
+              status: 'streaming',
+              content: current.summary.content + content,
+            }
+          : current.summary,
+      }));
+    },
+    onDone(summary) {
+      if (summary) setVerificationCache((current) => ({ ...current, summary }));
+      void queryClient.invalidateQueries({ queryKey: verificationOptions.queryKey });
+    },
+  });
+
+  const startQuizStream = useCallback(() => {
+    startQuizAiStream({ goalId, stepId });
+  }, [goalId, startQuizAiStream, stepId]);
+
+  const startTransferStream = useCallback(() => {
+    startTransferAiStream({ goalId, stepId });
+  }, [goalId, startTransferAiStream, stepId]);
+
+  const startTransferReviewStream = useCallback(
+    (content: string) => {
+      startTransferReviewAiStream({ goalId, stepId, content });
+    },
+    [goalId, startTransferReviewAiStream, stepId],
+  );
+
+  const startSummaryStream = useCallback(() => {
+    startSummaryAiStream({ goalId, stepId });
+  }, [goalId, startSummaryAiStream, stepId]);
 
   // Auto-generate quiz when entering quiz stage
   useEffect(() => {
     if (activeStage !== 'quiz') return;
-    if (verification?.quiz) return;
-    if (generateQuizMutation.isPending) return;
-    generateQuizMutation.mutate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStage, verification?.quiz]);
+    if (verification?.quiz?.status === 'complete') return;
+    startQuizStream();
+  }, [activeStage, startQuizStream, verification?.quiz?.status]);
 
   // Auto-generate transfer prompt when entering transfer stage
   useEffect(() => {
     if (activeStage !== 'transfer') return;
-    if (verification?.transfer) return;
-    if (generateTransferMutation.isPending) return;
-    generateTransferMutation.mutate();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeStage, verification?.transfer]);
+    if (verification?.transfer?.promptStatus === 'complete') return;
+    startTransferStream();
+  }, [activeStage, startTransferStream, verification?.transfer?.promptStatus]);
+
+  useEffect(() => {
+    if (verification?.quiz?.status === 'streaming') startQuizStream();
+  }, [startQuizStream, verification?.quiz?.status]);
+
+  useEffect(() => {
+    if (verification?.transfer?.promptStatus === 'streaming') startTransferStream();
+  }, [startTransferStream, verification?.transfer?.promptStatus]);
+
+  useEffect(() => {
+    if (
+      verification?.transfer?.feedbackStatus === 'streaming' &&
+      verification.transfer.userAnswer
+    ) {
+      startTransferReviewStream(verification.transfer.userAnswer);
+    }
+  }, [
+    startTransferReviewStream,
+    verification?.transfer?.feedbackStatus,
+    verification?.transfer?.userAnswer,
+  ]);
+
+  useEffect(() => {
+    if (verification?.summary?.status === 'streaming') startSummaryStream();
+  }, [startSummaryStream, verification?.summary?.status]);
 
   useEffect(() => {
     const quiz = verification?.quiz;
@@ -192,8 +359,9 @@ function LearningSessionPage() {
 
   const handleTransferSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
-    if (transferDraft.trim().length < 10 || submitTransferMutation.isPending) return;
-    submitTransferMutation.mutate();
+    const content = transferDraft.trim();
+    if (content.length < 10 || isTransferReviewStreamActive) return;
+    startTransferReviewStream(content);
   };
 
   const activeStageIndex = stages.findIndex((stage) => stage.id === activeStage);
@@ -271,15 +439,13 @@ function LearningSessionPage() {
                 setQuizAnswers((current) => ({ ...current, [questionId]: value }))
               }
               onSubmit={handleQuizSubmit}
-              isGenerating={generateQuizMutation.isPending}
+              isGenerating={isQuizStreamActive}
               isSubmitting={submitQuizMutation.isPending}
-              generateError={
-                generateQuizMutation.isError ? generateQuizMutation.error.message : undefined
-              }
+              generateError={quizStreamError}
               submitError={
                 submitQuizMutation.isError ? submitQuizMutation.error.message : undefined
               }
-              onRetryGenerate={() => generateQuizMutation.mutate()}
+              onRetryGenerate={startQuizStream}
             />
           )}
 
@@ -289,28 +455,20 @@ function LearningSessionPage() {
               draft={transferDraft}
               onDraftChange={setTransferDraft}
               onSubmit={handleTransferSubmit}
-              isGenerating={generateTransferMutation.isPending}
-              isSubmitting={submitTransferMutation.isPending}
-              generateError={
-                generateTransferMutation.isError
-                  ? generateTransferMutation.error.message
-                  : undefined
-              }
-              submitError={
-                submitTransferMutation.isError ? submitTransferMutation.error.message : undefined
-              }
-              onRetryGenerate={() => generateTransferMutation.mutate()}
+              isGenerating={isTransferStreamActive}
+              isSubmitting={isTransferReviewStreamActive}
+              generateError={transferStreamError}
+              submitError={transferReviewStreamError}
+              onRetryGenerate={startTransferStream}
             />
           )}
 
           {activeStage === 'summary' && (
             <SummarySection
               summary={verification?.summary}
-              isGenerating={generateSummaryMutation.isPending}
-              generateError={
-                generateSummaryMutation.isError ? generateSummaryMutation.error.message : undefined
-              }
-              onGenerate={() => generateSummaryMutation.mutate()}
+              isGenerating={isSummaryStreamActive}
+              generateError={summaryStreamError}
+              onGenerate={startSummaryStream}
             />
           )}
         </main>

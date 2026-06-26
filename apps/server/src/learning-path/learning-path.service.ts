@@ -228,9 +228,9 @@ export class LearningPathService {
 
     const existingAssistantMessage = await this.prisma.chatMessage.findFirst({
       where: { sessionId: session.id, role: 'assistant' },
-      select: { id: true },
+      select: { id: true, status: true, content: true },
     });
-    if (existingAssistantMessage) return;
+    if (existingAssistantMessage?.status === 'complete') return;
 
     const goal = toSharedGoal(goalRecord);
     const step: LearningStep = {
@@ -242,20 +242,30 @@ export class LearningPathService {
     };
     const userMessage = `请开始当前 Step「${step.title}」的教学。`;
     const systemPrompt = buildChatCoachPrompt({ goal: goal as Goal, step, messages: [] });
-    let assistantContent = '';
+    let assistantContent = existingAssistantMessage?.content ?? '';
     let lastFlushAt = 0;
-    const assistantDraft = await this.prisma.chatMessage.create({
-      data: {
-        sessionId: session.id,
-        role: 'assistant',
-        content: '',
-        status: 'streaming',
-      },
-    });
+    const assistantDraft =
+      existingAssistantMessage ??
+      (await this.prisma.chatMessage.create({
+        data: {
+          sessionId: session.id,
+          role: 'assistant',
+          content: '',
+          status: 'streaming',
+        },
+      }));
 
-    for await (const chunk of this.aiService.streamCoachReply(systemPrompt, [
+    const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
       { role: 'user', content: userMessage },
-    ])) {
+    ];
+    if (assistantContent) {
+      messages.push({
+        role: 'user',
+        content: `你已经生成到这里：\n\n${assistantContent}\n\n请从中断处继续，不要重复已经写过的内容。`,
+      });
+    }
+
+    for await (const chunk of this.aiService.streamCoachReply(systemPrompt, messages)) {
       assistantContent += chunk;
       const now = Date.now();
       if (now - lastFlushAt >= 500) {

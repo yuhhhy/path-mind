@@ -113,6 +113,11 @@ interface StepStreamCallbacks {
 }
 
 type StepSseEvent = Extract<SseEvent, { type: 'step' | 'done' | 'error' }>;
+type VerificationSseEvent<T> =
+  | { type: 'delta'; content: string }
+  | { type: 'state'; data: T }
+  | { type: 'done'; data?: T }
+  | { type: 'error'; message: string };
 
 function parseStepEvent(rawEvent: string): StepSseEvent | null {
   const data = extractSseData(rawEvent);
@@ -134,6 +139,47 @@ export function streamGoalSteps(goalId: string, callbacks: StepStreamCallbacks):
         callbacks.onStep(event.step);
       } else if (event.type === 'done') {
         callbacks.onDone();
+      } else if (event.type === 'error') {
+        callbacks.onError(new Error(event.message));
+      }
+    },
+    (error) => callbacks.onError(error),
+  );
+}
+
+function parseVerificationEvent<T>(rawEvent: string): VerificationSseEvent<T> | null {
+  const data = extractSseData(rawEvent);
+  if (!data) return null;
+  try {
+    return JSON.parse(data) as VerificationSseEvent<T>;
+  } catch {
+    return null;
+  }
+}
+
+export interface VerificationStreamCallbacks<T> {
+  onDelta(content: string): void;
+  onState(data: T): void;
+  onDone(data: T | undefined): void;
+  onError(error: Error): void;
+}
+
+function streamVerification<T>(
+  url: string,
+  body: unknown,
+  callbacks: VerificationStreamCallbacks<T>,
+): () => void {
+  return streamSseEvents(
+    { url, method: 'POST', body },
+    (rawEvent) => {
+      const event = parseVerificationEvent<T>(rawEvent);
+      if (!event) return;
+      if (event.type === 'delta') {
+        callbacks.onDelta(event.content);
+      } else if (event.type === 'state') {
+        callbacks.onState(event.data);
+      } else if (event.type === 'done') {
+        callbacks.onDone(event.data);
       } else if (event.type === 'error') {
         callbacks.onError(new Error(event.message));
       }
@@ -171,6 +217,17 @@ export async function generateQuiz(input: { goalId: string; stepId: string }): P
   return parseJsonResponse(response, 'AI 生成测验失败，请稍后重试。');
 }
 
+export function streamQuiz(
+  input: { goalId: string; stepId: string },
+  callbacks: VerificationStreamCallbacks<Quiz>,
+): () => void {
+  return streamVerification(
+    `${API_BASE_URL}/steps/${input.stepId}/quiz/generate/stream`,
+    { goalId: input.goalId },
+    callbacks,
+  );
+}
+
 export async function submitQuizAttempt(input: {
   quizId: string;
   answers: Array<{ questionId: string; answer: string }>;
@@ -197,6 +254,17 @@ export async function generateTransfer(input: {
   return parseJsonResponse(response, 'AI 生成迁移应用题失败，请稍后重试。');
 }
 
+export function streamTransfer(
+  input: { goalId: string; stepId: string },
+  callbacks: VerificationStreamCallbacks<Transfer>,
+): () => void {
+  return streamVerification(
+    `${API_BASE_URL}/steps/${input.stepId}/transfer/generate/stream`,
+    { goalId: input.goalId },
+    callbacks,
+  );
+}
+
 export async function submitTransfer(input: {
   goalId: string;
   stepId: string;
@@ -211,6 +279,17 @@ export async function submitTransfer(input: {
   return parseJsonResponse(response, 'AI 批改迁移应用失败，请稍后重试。');
 }
 
+export function streamSubmitTransfer(
+  input: { goalId: string; stepId: string; content: string },
+  callbacks: VerificationStreamCallbacks<Transfer>,
+): () => void {
+  return streamVerification(
+    `${API_BASE_URL}/steps/${input.stepId}/transfer/submit/stream`,
+    { goalId: input.goalId, content: input.content },
+    callbacks,
+  );
+}
+
 export async function generateStepSummary(input: {
   goalId: string;
   stepId: string;
@@ -222,6 +301,17 @@ export async function generateStepSummary(input: {
   });
 
   return parseJsonResponse(response, 'AI 生成总结失败，请稍后重试。');
+}
+
+export function streamStepSummary(
+  input: { goalId: string; stepId: string },
+  callbacks: VerificationStreamCallbacks<StepSummary>,
+): () => void {
+  return streamVerification(
+    `${API_BASE_URL}/steps/${input.stepId}/summary/generate/stream`,
+    { goalId: input.goalId },
+    callbacks,
+  );
 }
 
 export async function deleteGoal(goalId: string): Promise<{ id: string }> {

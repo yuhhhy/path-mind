@@ -3,6 +3,7 @@ import { CheckCircle2, FileText, GitBranch } from 'lucide-react';
 import { Suspense, lazy } from 'react';
 import type { FormEvent } from 'react';
 import { Button } from '../../shared/ui/Button';
+import { StreamingOutputBlock } from '../ai-generation/StreamingOutputBlock';
 
 const MarkdownRenderer = lazy(() =>
   import('../chat/MarkdownRenderer').then((m) => ({ default: m.MarkdownRenderer })),
@@ -137,7 +138,7 @@ export function QuizSection({
         label="Quiz"
         title="综合测验"
       />
-      {!quiz ? (
+      {!quiz || quiz.status === 'streaming' ? (
         <div className="mt-5">
           {generateError ? (
             <div className="space-y-3">
@@ -145,6 +146,14 @@ export function QuizSection({
               <Button onClick={onRetryGenerate} size="md">
                 重试
               </Button>
+            </div>
+          ) : quiz?.draftContent ? (
+            <div className="space-y-3">
+              <p className="text-sm text-gray-400">AI 正在生成测验题目...</p>
+              <StreamingOutputBlock
+                content={quiz.draftContent}
+                placeholder="AI 正在生成测验题目..."
+              />
             </div>
           ) : (
             <p className="text-sm text-gray-400">
@@ -277,13 +286,20 @@ export function TransferSection({
           <div>
             <p className="text-sm font-medium uppercase tracking-wider text-gray-400">场景题目</p>
             <div className="mt-2">
-              <Suspense fallback={<p className="text-sm text-gray-400">渲染中...</p>}>
-                <MarkdownRenderer content={transfer.prompt} />
-              </Suspense>
+              {transfer.promptStatus === 'streaming' ? (
+                <StreamingOutputBlock
+                  content={transfer.prompt}
+                  placeholder="AI 正在生成迁移应用题..."
+                />
+              ) : (
+                <Suspense fallback={<p className="text-sm text-gray-400">渲染中...</p>}>
+                  <MarkdownRenderer content={transfer.prompt} />
+                </Suspense>
+              )}
             </div>
           </div>
 
-          {!transfer.userAnswer ? (
+          {transfer.promptStatus === 'streaming' ? null : !transfer.userAnswer ? (
             <form onSubmit={onSubmit} className="space-y-4">
               <textarea
                 className="min-h-40 w-full resize-y rounded-md border border-gray-200 px-3 py-2 text-sm leading-6 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-500"
@@ -324,9 +340,16 @@ export function TransferSection({
                     )}
                   </div>
                   <div className="mt-3">
-                    <Suspense fallback={<p className="text-sm text-gray-400">渲染中...</p>}>
-                      <MarkdownRenderer content={transfer.aiFeedback} />
-                    </Suspense>
+                    {transfer.feedbackStatus === 'streaming' ? (
+                      <StreamingOutputBlock
+                        content={transfer.aiFeedback}
+                        placeholder="AI 正在评价迁移应用..."
+                      />
+                    ) : (
+                      <Suspense fallback={<p className="text-sm text-gray-400">渲染中...</p>}>
+                        <MarkdownRenderer content={transfer.aiFeedback} />
+                      </Suspense>
+                    )}
                   </div>
                 </div>
               )}
@@ -374,12 +397,22 @@ export function SummarySection({
         </Button>
       ) : (
         <div className="mt-5 space-y-4">
-          <Suspense fallback={<p className="text-sm text-gray-400">渲染中...</p>}>
-            <MarkdownRenderer content={summary.content} />
-          </Suspense>
-          <FeedbackList title="关键收获" items={summary.keyTakeaways} />
-          <FeedbackList title="薄弱点" items={summary.weakPoints} />
-          <FeedbackList title="下一步建议" items={summary.nextSuggestions} />
+          {summary.status === 'streaming' ? (
+            <StreamingOutputBlock
+              content={summary.content}
+              maxHeightClassName="max-h-96"
+              placeholder="AI 正在生成学习总结..."
+            />
+          ) : (
+            <>
+              <Suspense fallback={<p className="text-sm text-gray-400">渲染中...</p>}>
+                <MarkdownRenderer content={summary.content} />
+              </Suspense>
+              <FeedbackList title="关键收获" items={summary.keyTakeaways} />
+              <FeedbackList title="薄弱点" items={summary.weakPoints} />
+              <FeedbackList title="下一步建议" items={summary.nextSuggestions} />
+            </>
+          )}
         </div>
       )}
       {generateError && <ErrorMessage message={generateError} />}

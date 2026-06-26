@@ -45,6 +45,8 @@ export interface Quiz {
   id: string;
   goalId: string;
   stepId: string;
+  status: 'streaming' | 'complete';
+  draftContent: string;
   questions: QuizQuestion[];
   createdAt: string;
 }
@@ -69,8 +71,10 @@ export interface Transfer {
   goalId: string;
   stepId: string;
   prompt: string;
+  promptStatus: 'streaming' | 'complete';
   userAnswer?: string;
   aiFeedback?: string;
+  feedbackStatus: 'streaming' | 'complete';
   score?: number;
   createdAt: string;
 }
@@ -80,6 +84,7 @@ export interface StepSummary {
   goalId: string;
   stepId: string;
   content: string;
+  status: 'streaming' | 'complete';
   keyTakeaways: string[];
   weakPoints: string[];
   nextSuggestions: string[];

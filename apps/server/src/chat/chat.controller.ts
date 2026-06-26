@@ -116,9 +116,7 @@ export class ChatController {
         prepared.messages,
         abortController.signal,
       )) {
-        if (closed) {
-          return;
-        }
+        if (closed) break;
         assistantContent = appendMessageDelta(assistantContent, content);
         if (++draftWriteCounter % 20 === 0) {
           void this.chatService.updateAssistantDraft(assistantDraft.id, assistantContent);
@@ -126,12 +124,15 @@ export class ChatController {
         writeSse(res, { type: 'delta', content });
       }
 
+      await this.chatService.completeAssistantMessage(assistantDraft.id, assistantContent);
       if (!closed) {
-        await this.chatService.completeAssistantMessage(assistantDraft.id, assistantContent);
         writeSse(res, { type: 'done' });
         res.end();
       }
     } catch (error) {
+      await this.chatService
+        .completeAssistantMessage(assistantDraft.id, assistantContent)
+        .catch(() => undefined);
       if (!closed) {
         const message = error instanceof Error ? error.message : 'AI 服务暂时不可用。';
         writeSse(res, { type: 'error', message });

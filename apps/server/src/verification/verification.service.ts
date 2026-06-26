@@ -14,6 +14,13 @@ import type {
   StepVerification,
   Transfer,
 } from '@pathmind/shared';
+import type { z } from 'zod';
+import type {
+  quizGenerationSchema,
+  stepSummarySchema,
+  transferGenerationSchema,
+  transferGradingSchema,
+} from '../ai/ai.schemas.js';
 import { AiService } from '../ai/ai.service.js';
 import { DEV_USER_ID } from '../config/constants.js';
 import { PrismaService } from '../prisma/prisma.service.js';
@@ -76,6 +83,83 @@ export class VerificationService {
     });
 
     return this.mapQuiz(quiz);
+  }
+
+  async prepareQuizDraft(stepId: string, input: GenerateQuizDto) {
+    const existing = await this.prisma.quiz.findFirst({
+      where: { stepId, goalId: input.goalId, status: 'streaming' },
+      orderBy: { createdAt: 'desc' },
+      include: { questions: { orderBy: { order: 'asc' } } },
+    });
+
+    if (existing) return this.mapQuiz(existing);
+
+    const quiz = await this.prisma.quiz.create({
+      data: {
+        goalId: input.goalId,
+        stepId,
+        status: 'streaming',
+        draftContent: '',
+      },
+      include: { questions: { orderBy: { order: 'asc' } } },
+    });
+    return this.mapQuiz(quiz);
+  }
+
+  async updateQuizDraft(quizId: string, draftContent: string) {
+    await this.prisma.quiz.update({
+      where: { id: quizId },
+      data: { draftContent, status: 'streaming' },
+    });
+  }
+
+  async completeQuizDraft(quizId: string, generated: z.infer<typeof quizGenerationSchema>) {
+    await this.prisma.quizQuestion.deleteMany({ where: { quizId } });
+    const quiz = await this.prisma.quiz.update({
+      where: { id: quizId },
+      data: {
+        status: 'complete',
+        questions: {
+          create: generated.questions.map((question, index) => ({
+            type: question.type,
+            question: question.question,
+            options: question.options ?? [],
+            correctAnswer: question.correctAnswer,
+            explanation: question.explanation,
+            order: index,
+          })),
+        },
+      },
+      include: { questions: { orderBy: { order: 'asc' } } },
+    });
+    return this.mapQuiz(quiz);
+  }
+
+  async *streamQuiz(stepId: string, input: GenerateQuizDto, signal?: AbortSignal) {
+    const context = await this.getStepContext(input.goalId, stepId);
+    const draft = await this.prepareQuizDraft(stepId, input);
+    let draftContent = draft.draftContent ?? '';
+
+    yield { type: 'state' as const, data: draft };
+
+    let writeCounter = 0;
+    for await (const event of this.aiService.streamQuiz(
+      buildQuizPrompt(context),
+      draftContent,
+      signal,
+    )) {
+      if (event.type === 'delta') {
+        draftContent += event.content;
+        if (++writeCounter % 20 === 0) {
+          void this.updateQuizDraft(draft.id, draftContent);
+        }
+        yield event;
+      } else {
+        await this.updateQuizDraft(draft.id, draftContent);
+        const quiz = await this.completeQuizDraft(draft.id, event.parsed);
+        yield { type: 'done' as const, data: quiz };
+      }
+    }
   }
 
   async submitQuizAttempt(
@@ -206,6 +290,95 @@ export class VerificationService {
     return this.mapTransfer(transfer);
   }
 
+  async prepareTransferDraft(stepId: string, input: GenerateTransferDto) {
+    const existing = await this.prisma.transfer.findUnique({ where: { stepId } });
+    if (existing) return this.mapTransfer(existing);
+
+    const transfer = await this.prisma.transfer.create({
+      data: {
+        goalId: input.goalId,
+        stepId,
+        prompt: '',
+        promptStatus: 'streaming',
+      },
+    });
+    return this.mapTransfer(transfer);
+  }
+
+  async updateTransferPromptDraft(stepId: string, prompt: string) {
+    await this.prisma.transfer.update({
+      where: { stepId },
+      data: { prompt, promptStatus: 'streaming' },
+    });
+  }
+
+  async completeTransferPromptDraft(
+    stepId: string,
+    generated: z.infer<typeof transferGenerationSchema>,
+  ) {
+    const transfer = await this.prisma.transfer.update({
+      where: { stepId },
+      data: { prompt: generated.prompt, promptStatus: 'complete' },
+    });
+    return this.mapTransfer(transfer);
+  }
+
+  async *streamTransfer(stepId: string, input: GenerateTransferDto, signal?: AbortSignal) {
+    const [context, draft] = await Promise.all([
+      this.getStepContext(input.goalId, stepId),
+      this.prepareTransferDraft(stepId, input),
+    ]);
+
+    if (draft.promptStatus === 'complete' && draft.prompt.trim()) {
+      yield { type: 'done' as const, data: draft };
+      return;
+    }
+
+    const quiz = await this.prisma.quiz.findFirst({
+      where: { stepId, goalId: input.goalId },
+      orderBy: { createdAt: 'desc' },
+      include: {
+        questions: { orderBy: { order: 'asc' } },
+        attempts: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: { answers: true },
+        },
+      },
+    });
+    const latestAttempt = quiz?.attempts[0];
+    const questionById = new Map(quiz?.questions.map((q) => [q.id, q]) ?? []);
+    const quizResults =
+      latestAttempt?.answers.map((answer) => ({
+        question: questionById.get(answer.questionId)?.question ?? '',
+        answer: answer.answer,
+        isCorrect: answer.isCorrect,
+        feedback: answer.feedback,
+      })) ?? [];
+
+    let draftJson = draft.prompt;
+    yield { type: 'state' as const, data: draft };
+
+    let writeCounter = 0;
+    for await (const event of this.aiService.streamTransfer(
+      buildTransferPrompt({ ...context, quizResults }),
+      draftJson,
+      signal,
+    )) {
+      if (event.type === 'delta') {
+        draftJson += event.content;
+        if (++writeCounter % 20 === 0) {
+          void this.updateTransferPromptDraft(stepId, draftJson);
+        }
+        yield event;
+      } else {
+        await this.updateTransferPromptDraft(stepId, draftJson);
+        const transfer = await this.completeTransferPromptDraft(stepId, event.parsed);
+        yield { type: 'done' as const, data: transfer };
+      }
+    }
+  }
+
   async submitTransfer(stepId: string, input: SubmitTransferDto): Promise<Transfer> {
     const transfer = await this.prisma.transfer.findUnique({ where: { stepId } });
     if (!transfer) {
@@ -240,6 +413,86 @@ export class VerificationService {
     });
 
     return this.mapTransfer(updated);
+  }
+
+  async prepareTransferFeedbackDraft(stepId: string, input: SubmitTransferDto) {
+    const transfer = await this.prisma.transfer.findUnique({ where: { stepId } });
+    if (!transfer) {
+      throw new BadRequestException('请先生成迁移应用题，再提交答案。');
+    }
+
+    const updated = await this.prisma.transfer.update({
+      where: { stepId },
+      data: {
+        userAnswer: input.content,
+        aiFeedback: '',
+        feedbackStatus: 'streaming',
+        score: null,
+      },
+    });
+
+    return this.mapTransfer(updated);
+  }
+
+  async updateTransferFeedbackDraft(stepId: string, feedback: string) {
+    await this.prisma.transfer.update({
+      where: { stepId },
+      data: { aiFeedback: feedback, feedbackStatus: 'streaming' },
+    });
+  }
+
+  async completeTransferFeedbackDraft(
+    stepId: string,
+    generated: z.infer<typeof transferGradingSchema>,
+  ) {
+    const transfer = await this.prisma.transfer.update({
+      where: { stepId },
+      data: {
+        aiFeedback: generated.feedback,
+        feedbackStatus: 'complete',
+        score: generated.score,
+      },
+    });
+    return this.mapTransfer(transfer);
+  }
+
+  async *streamSubmitTransfer(stepId: string, input: SubmitTransferDto, signal?: AbortSignal) {
+    const [draft, step] = await Promise.all([
+      this.prepareTransferFeedbackDraft(stepId, input),
+      this.prisma.learningStep.findFirst({
+        where: { id: stepId, goalId: input.goalId },
+        include: { goal: true },
+      }),
+    ]);
+    if (!step) throw new NotFoundException('没有找到这个学习 Step。');
+    this.assertDevGoal(step.goal.devUserId);
+
+    let draftJson = draft.aiFeedback ?? '';
+    yield { type: 'state' as const, data: draft };
+
+    let writeCounter = 0;
+    for await (const event of this.aiService.streamTransferGrading(
+      buildGradeTransferPrompt({
+        stepTitle: step.title,
+        stepDescription: step.description,
+        transferPrompt: draft.prompt,
+        userAnswer: input.content,
+      }),
+      draftJson,
+      signal,
+    )) {
+      if (event.type === 'delta') {
+        draftJson += event.content;
+        if (++writeCounter % 20 === 0) {
+          void this.updateTransferFeedbackDraft(stepId, draftJson);
+        }
+        yield event;
+      } else {
+        await this.updateTransferFeedbackDraft(stepId, draftJson);
+        const transfer = await this.completeTransferFeedbackDraft(stepId, event.parsed);
+        yield { type: 'done' as const, data: transfer };
+      }
+    }
   }
 
   async generateSummary(stepId: string, input: GenerateSummaryDto): Promise<StepSummary> {
@@ -306,6 +559,113 @@ export class VerificationService {
     return this.mapSummary(summary);
   }
 
+  async prepareSummaryDraft(stepId: string, input: GenerateSummaryDto) {
+    const existing = await this.prisma.stepSummary.findUnique({ where: { stepId } });
+    if (existing) return this.mapSummary(existing);
+
+    const summary = await this.prisma.stepSummary.create({
+      data: {
+        goalId: input.goalId,
+        stepId,
+        content: '',
+        status: 'streaming',
+        keyTakeaways: [],
+        weakPoints: [],
+        nextSuggestions: [],
+      },
+    });
+    return this.mapSummary(summary);
+  }
+
+  async updateSummaryDraft(stepId: string, content: string) {
+    await this.prisma.stepSummary.update({
+      where: { stepId },
+      data: { content, status: 'streaming' },
+    });
+  }
+
+  async completeSummaryDraft(stepId: string, generated: z.infer<typeof stepSummarySchema>) {
+    const summary = await this.prisma.stepSummary.update({
+      where: { stepId },
+      data: {
+        content: generated.content,
+        status: 'complete',
+        keyTakeaways: generated.keyTakeaways,
+        weakPoints: generated.weakPoints,
+        nextSuggestions: generated.nextSuggestions,
+      },
+    });
+    return this.mapSummary(summary);
+  }
+
+  async *streamSummary(stepId: string, input: GenerateSummaryDto, signal?: AbortSignal) {
+    const [context, quiz, transfer] = await Promise.all([
+      this.getStepContext(input.goalId, stepId),
+      this.prisma.quiz.findFirst({
+        where: { stepId, goalId: input.goalId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          questions: { orderBy: { order: 'asc' } },
+          attempts: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: { answers: true },
+          },
+        },
+      }),
+      this.prisma.transfer.findUnique({ where: { stepId } }),
+    ]);
+    const latestAttempt = quiz?.attempts[0];
+
+    if (!quiz || !latestAttempt || !transfer?.userAnswer || !transfer.aiFeedback) {
+      throw new BadRequestException('请先完成测验和迁移应用，再生成总结。');
+    }
+
+    const draft = await this.prepareSummaryDraft(stepId, input);
+    if (draft.status === 'complete' && draft.content.trim()) {
+      yield { type: 'done' as const, data: draft };
+      return;
+    }
+
+    const questionById = new Map(quiz.questions.map((question) => [question.id, question]));
+    let draftJson = draft.content;
+    yield { type: 'state' as const, data: draft };
+
+    let writeCounter = 0;
+    for await (const event of this.aiService.streamStepSummary(
+      buildStepSummaryPrompt({
+        ...context,
+        quizScore: latestAttempt.score,
+        quizResults: latestAttempt.answers.map((answer) => ({
+          question: questionById.get(answer.questionId)?.question ?? '',
+          answer: answer.answer,
+          isCorrect: answer.isCorrect,
+          feedback: answer.feedback,
+        })),
+        transfer: {
+          prompt: transfer.prompt,
+          userAnswer: transfer.userAnswer,
+          aiFeedback: transfer.aiFeedback,
+          score: transfer.score ?? 0,
+        },
+      }),
+      draftJson,
+      signal,
+    )) {
+      if (event.type === 'delta') {
+        draftJson += event.content;
+        if (++writeCounter % 20 === 0) {
+          void this.updateSummaryDraft(stepId, draftJson);
+        }
+        yield event;
+      } else {
+        await this.updateSummaryDraft(stepId, draftJson);
+        const summary = await this.completeSummaryDraft(stepId, event.parsed);
+        yield { type: 'done' as const, data: summary };
+      }
+    }
+  }
+
   async canCompleteStep(stepId: string): Promise<boolean> {
     const verification = await this.buildVerification(stepId);
     return verification.canCompleteStep;
@@ -365,7 +725,13 @@ export class VerificationService {
       latestAttempt: latestAttempt ? this.mapQuizAttempt(latestAttempt) : undefined,
       transfer: transfer ? this.mapTransfer(transfer) : undefined,
       summary: summary ? this.mapSummary(summary) : undefined,
-      canCompleteStep: Boolean(latestAttempt && transfer?.userAnswer && summary),
+      canCompleteStep: Boolean(
+        latestAttempt &&
+        transfer?.userAnswer &&
+        transfer.feedbackStatus !== 'streaming' &&
+        summary &&
+        summary.status !== 'streaming',
+      ),
     };
   }
 
@@ -379,6 +745,8 @@ export class VerificationService {
     id: string;
     goalId: string;
     stepId: string;
+    status?: string;
+    draftContent?: string;
     createdAt: Date;
     questions: Array<{
       id: string;
@@ -394,6 +762,8 @@ export class VerificationService {
       id: quiz.id,
       goalId: quiz.goalId,
       stepId: quiz.stepId,
+      status: quiz.status === 'streaming' ? 'streaming' : 'complete',
+      draftContent: quiz.draftContent ?? '',
       createdAt: quiz.createdAt.toISOString(),
       questions: quiz.questions.map(
         (question): QuizQuestion => ({
@@ -444,8 +814,10 @@ export class VerificationService {
     goalId: string;
     stepId: string;
     prompt: string;
+    promptStatus?: string;
     userAnswer: string | null;
     aiFeedback: string | null;
+    feedbackStatus?: string;
     score: number | null;
     createdAt: Date;
   }): Transfer {
@@ -454,8 +826,10 @@ export class VerificationService {
       goalId: transfer.goalId,
       stepId: transfer.stepId,
       prompt: transfer.prompt,
+      promptStatus: transfer.promptStatus === 'streaming' ? 'streaming' : 'complete',
       userAnswer: transfer.userAnswer ?? undefined,
       aiFeedback: transfer.aiFeedback ?? undefined,
+      feedbackStatus: transfer.feedbackStatus === 'streaming' ? 'streaming' : 'complete',
       score: transfer.score ?? undefined,
       createdAt: transfer.createdAt.toISOString(),
     };
@@ -466,6 +840,7 @@ export class VerificationService {
     goalId: string;
     stepId: string;
     content: string;
+    status?: string;
     keyTakeaways: string[];
     weakPoints: string[];
     nextSuggestions: string[];
@@ -474,6 +849,7 @@ export class VerificationService {
   }): StepSummary {
     return {
       ...summary,
+      status: summary.status === 'streaming' ? 'streaming' : 'complete',
       createdAt: summary.createdAt.toISOString(),
       updatedAt: summary.updatedAt.toISOString(),
     };
