@@ -1,6 +1,7 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Goal } from '@pathmind/shared';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { VerificationService } from '../verification/verification.service.js';
 import type { CreateGoalDto } from './dto/create-goal.dto.js';
 import { completeStepProgress } from './utils/goal-progress.js';
 import { toSharedGoal } from './utils/goal.mapper.js';
@@ -9,7 +10,10 @@ const DEV_USER_ID = 'local-dev-user';
 
 @Injectable()
 export class GoalsService {
-  constructor(@Inject(PrismaService) private readonly prisma: PrismaService) {}
+  constructor(
+    @Inject(PrismaService) private readonly prisma: PrismaService,
+    @Inject(VerificationService) private readonly verificationService: VerificationService,
+  ) {}
 
   async findAll(): Promise<Goal[]> {
     const goals = await this.prisma.goal.findMany({
@@ -76,6 +80,11 @@ export class GoalsService {
 
     if (!goal.steps.some((step) => step.id === stepId)) {
       throw new NotFoundException('没有找到这个学习 Step。');
+    }
+
+    const canCompleteStep = await this.verificationService.canCompleteStep(stepId);
+    if (!canCompleteStep) {
+      throw new BadRequestException('请先完成复述、测验和总结，再完成本节 Step。');
     }
 
     const result = completeStepProgress(goal.steps, stepId);

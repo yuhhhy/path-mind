@@ -45,7 +45,9 @@ export function LearningPath({ goal }: LearningPathProps) {
                     >
                       {step.title}
                     </h3>
-                    <p className="mt-1 text-sm leading-relaxed text-gray-500">{step.description}</p>
+                    <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-gray-500">
+                      {step.description}
+                    </p>
                   </div>
                   <div className="flex shrink-0 items-center gap-2.5">
                     <span className="text-xs text-gray-400">{step.estimatedMinutes} 分钟</span>

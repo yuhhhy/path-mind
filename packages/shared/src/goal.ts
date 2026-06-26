@@ -29,6 +29,72 @@ export interface LearningStep {
   estimatedMinutes: number;
 }
 
+export type QuizQuestionType = 'explain_back' | 'single_choice' | 'scenario_question';
+
+export interface QuizQuestion {
+  id: string;
+  type: QuizQuestionType;
+  question: string;
+  options?: string[];
+  correctAnswer: string;
+  explanation: string;
+  order: number;
+}
+
+export interface Quiz {
+  id: string;
+  goalId: string;
+  stepId: string;
+  questions: QuizQuestion[];
+  createdAt: string;
+}
+
+export interface QuizAttemptAnswer {
+  questionId: string;
+  answer: string;
+  isCorrect: boolean;
+  feedback: string;
+}
+
+export interface QuizAttempt {
+  id: string;
+  quizId: string;
+  answers: QuizAttemptAnswer[];
+  score: number;
+  createdAt: string;
+}
+
+export interface Transfer {
+  id: string;
+  goalId: string;
+  stepId: string;
+  prompt: string;
+  userAnswer?: string;
+  aiFeedback?: string;
+  score?: number;
+  createdAt: string;
+}
+
+export interface StepSummary {
+  id: string;
+  goalId: string;
+  stepId: string;
+  content: string;
+  keyTakeaways: string[];
+  weakPoints: string[];
+  nextSuggestions: string[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface StepVerification {
+  quiz?: Quiz;
+  latestAttempt?: QuizAttempt;
+  transfer?: Transfer;
+  summary?: StepSummary;
+  canCompleteStep: boolean;
+}
+
 export interface Goal {
   id: string;
   title: string;

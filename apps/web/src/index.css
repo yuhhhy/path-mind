@@ -31,6 +31,10 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+html {
+  scrollbar-gutter: stable;
+}
+
 a {
   text-decoration: none;
 }

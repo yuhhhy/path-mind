@@ -278,7 +278,7 @@ function GoalDetailPage() {
                           <h3 className="mt-0.5 text-sm font-semibold text-gray-900">
                             {step.title}
                           </h3>
-                          <p className="mt-1 text-sm leading-relaxed text-gray-500">
+                          <p className="mt-1 line-clamp-2 text-sm leading-relaxed text-gray-500">
                             {step.description}
                           </p>
                         </div>

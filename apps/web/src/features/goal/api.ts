@@ -4,6 +4,11 @@ import type {
   Goal,
   LearningConfig,
   LearningStep,
+  Quiz,
+  QuizAttemptAnswer,
+  StepSummary,
+  StepVerification,
+  Transfer,
 } from '@pathmind/shared';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
@@ -188,6 +193,74 @@ export async function completeStep(goalId: string, stepId: string): Promise<Goal
   });
 
   return parseJsonResponse(response, 'AI 服务暂时不可用，请检查后端服务或数据库。');
+}
+
+export async function getStepVerification(stepId: string): Promise<StepVerification> {
+  const response = await fetch(`${API_BASE_URL}/steps/${stepId}/verification`);
+  return parseJsonResponse(response, '没有找到这个学习 Step 的验证状态。');
+}
+
+export async function generateQuiz(input: { goalId: string; stepId: string }): Promise<Quiz> {
+  const response = await fetch(`${API_BASE_URL}/steps/${input.stepId}/quiz/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ goalId: input.goalId }),
+  });
+
+  return parseJsonResponse(response, 'AI 生成测验失败，请稍后重试。');
+}
+
+export async function submitQuizAttempt(input: {
+  quizId: string;
+  answers: Array<{ questionId: string; answer: string }>;
+}): Promise<{ score: number; results: QuizAttemptAnswer[] }> {
+  const response = await fetch(`${API_BASE_URL}/quizzes/${input.quizId}/attempt`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ answers: input.answers }),
+  });
+
+  return parseJsonResponse(response, '提交测验失败，请稍后重试。');
+}
+
+export async function generateTransfer(input: {
+  goalId: string;
+  stepId: string;
+}): Promise<Transfer> {
+  const response = await fetch(`${API_BASE_URL}/steps/${input.stepId}/transfer/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ goalId: input.goalId }),
+  });
+
+  return parseJsonResponse(response, 'AI 生成迁移应用题失败，请稍后重试。');
+}
+
+export async function submitTransfer(input: {
+  goalId: string;
+  stepId: string;
+  content: string;
+}): Promise<Transfer> {
+  const response = await fetch(`${API_BASE_URL}/steps/${input.stepId}/transfer/submit`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ goalId: input.goalId, content: input.content }),
+  });
+
+  return parseJsonResponse(response, 'AI 批改迁移应用失败，请稍后重试。');
+}
+
+export async function generateStepSummary(input: {
+  goalId: string;
+  stepId: string;
+}): Promise<StepSummary> {
+  const response = await fetch(`${API_BASE_URL}/steps/${input.stepId}/summary/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ goalId: input.goalId }),
+  });
+
+  return parseJsonResponse(response, 'AI 生成总结失败，请稍后重试。');
 }
 
 export async function deleteGoal(goalId: string): Promise<{ id: string }> {

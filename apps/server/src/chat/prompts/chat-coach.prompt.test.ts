@@ -50,4 +50,12 @@ describe('buildChatCoachPrompt', () => {
     expect(prompt).toContain('始终使用简体中文回复');
     expect(prompt).toContain('除非用户明确要求英文');
   });
+
+  it('does not ask the teaching chat to run verification exercises', () => {
+    const prompt = buildChatCoachPrompt(input);
+
+    expect(prompt).not.toContain('验证方式');
+    expect(prompt).not.toContain('给用户一个小问题');
+    expect(prompt).toContain('不要安排复述、小测、面试题、实践任务');
+  });
 });

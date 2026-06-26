@@ -17,14 +17,17 @@ interface ChatPanelProps {
 
 export function ChatPanel({ goal, step }: ChatPanelProps) {
   const queryClient = useQueryClient();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const chatOptions = useMemo(() => chatSessionQueryOptions(goal.id, step.id), [goal.id, step.id]);
+  const [messages, setMessages] = useState<ChatMessage[]>(
+    () =>
+      queryClient.getQueryData<{ messages: ChatMessage[] }>(chatOptions.queryKey)?.messages ?? [],
+  );
   const [draft, setDraft] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState('');
   const abortRef = useRef<AbortController | null>(null);
   const autoStartKeyRef = useRef('');
 
-  const chatOptions = useMemo(() => chatSessionQueryOptions(goal.id, step.id), [goal.id, step.id]);
   const chatQuery = useQuery(chatOptions);
 
   useEffect(() => {
@@ -179,7 +182,7 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
               <div
                 className={
                   message.role === 'user'
-                    ? 'my-8 rounded-lg border border-orange-200 bg-orange-50 px-4 py-4 font-serif text-sm leading-6 text-orange-900'
+                    ? 'my-8 rounded-lg border border-orange-100 bg-orange-50 px-4 py-4 text-sm leading-6 text-orange-900'
                     : 'px-1 py-3 text-sm text-gray-700'
                 }
                 key={`${message.role}-${index}`}
@@ -193,7 +196,10 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
                     <p className="text-gray-400">AI 正在组织讲解...</p>
                   )
                 ) : (
-                  <p>{message.content}</p>
+                  <>
+                    <p className="text-sm font-semibold text-orange-950">我的追问</p>
+                    <p className="mt-3 whitespace-pre-wrap">{message.content}</p>
+                  </>
                 )}
               </div>
             ))}

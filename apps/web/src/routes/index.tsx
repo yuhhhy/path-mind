@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
-import { ArrowUpRight, Clock, FolderOpen, Plus, Sparkles, Target } from 'lucide-react';
+import { ArrowUpRight, Clock, FolderOpen, Plus, Target } from 'lucide-react';
 import { useState } from 'react';
 import { initGoal } from '../features/goal/api';
 import { mockGoals } from '../features/goal/mockGoals';
@@ -81,7 +81,6 @@ function DashboardPage() {
               onClick={() => createGoalMutation.mutate(goalTitle)}
               type="button"
             >
-              <Sparkles size={15} />
               {createGoalMutation.isPending ? '生成中...' : '生成'}
             </button>
           </div>

@@ -21,13 +21,6 @@ const outputFormatLabel: Record<string, string> = {
   code: '代码示例',
 };
 
-const assessmentMethodLabel: Record<string, string> = {
-  teach_back: '口头复述（用自己的话把刚学到的内容解释一遍）',
-  interview_question: '面试题验证（回答一道相关面试题）',
-  quiz: '小测验',
-  practice_task: '实践任务',
-};
-
 function mapList<T extends string>(items: T[], labelMap: Record<string, string>): string {
   return items.map((v) => labelMap[v] ?? v).join('、');
 }
@@ -47,7 +40,6 @@ export function buildChatCoachPrompt(input: ChatSessionInput) {
 - 类型：${goalTypeLabel[goal.type] ?? goal.type}
 - 教学策略：${teachingStrategyLabel[learningConfig.teachingStrategy] ?? learningConfig.teachingStrategy}
 - 输出形式偏好：${mapList(learningConfig.preferredOutputFormats, outputFormatLabel)}
-- 验证方式：${mapList(learningConfig.assessmentMethods, assessmentMethodLabel)}
 - 最终产出：${goal.finalOutcome.join('；')}
 
 当前 Step：
@@ -62,7 +54,7 @@ export function buildChatCoachPrompt(input: ChatSessionInput) {
 3. 如果是第一性原理，用因果链解释：为什么需要这个机制 → 没有它会发生什么问题 → 它如何解决 → 它和上下游步骤的关系。
 4. 如果输出形式包含文本流程图，请使用文本流程图辅助解释。
 5. 如果输出形式包含表格，可以在合适时使用表格。
-6. 如果当前 Step 适合提问，请在结尾给用户一个小问题；说明这是什么类型的验证练习时，用自然语言描述，不要引用内部字段名。
+6. 教学阶段只负责讲清概念和回答追问，不要安排复述、小测、面试题、实践任务，也不要要求用户“用自己的话解释一遍”。
 7. 不要一次性讲太多，保持像教练一样逐步推进。
 8. 文案要克制、具体，不要营销化。
 9. 输出 Markdown。

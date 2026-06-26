@@ -36,6 +36,45 @@ const learningPathOutputSchema = z.object({
   steps: z.array(fullStepSchema).min(4).max(7),
 });
 
+const quizQuestionSchema = z.object({
+  type: z.enum(['explain_back', 'single_choice', 'scenario_question']),
+  question: z.string().min(1),
+  options: z.array(z.string().min(1)).optional(),
+  correctAnswer: z.string().min(1),
+  explanation: z.string().min(1),
+});
+
+const quizGenerationSchema = z.object({
+  questions: z.array(quizQuestionSchema).min(3).max(4),
+});
+
+const openAnswerGradingSchema = z.object({
+  isCorrect: z.boolean(),
+  feedback: z.string().min(1),
+});
+
+const transferGenerationSchema = z.object({
+  prompt: z.string().min(1),
+});
+
+const transferGradingSchema = z.object({
+  score: z.number().int().min(0).max(100),
+  feedback: z.string().min(1),
+});
+
+const stepSummarySchema = z.object({
+  content: z.string().min(1),
+  keyTakeaways: z.array(z.string().min(1)),
+  weakPoints: z.array(z.string().min(1)),
+  nextSuggestions: z.array(z.string().min(1)),
+});
+
+export type QuizGeneration = z.infer<typeof quizGenerationSchema>;
+export type OpenAnswerGrading = z.infer<typeof openAnswerGradingSchema>;
+export type TransferGeneration = z.infer<typeof transferGenerationSchema>;
+export type TransferGrading = z.infer<typeof transferGradingSchema>;
+export type StepSummaryGeneration = z.infer<typeof stepSummarySchema>;
+
 export type StreamedPathEvent =
   | {
       type: 'metadata';
@@ -145,6 +184,26 @@ export class AiService {
     }
 
     return this.parseLearningPath(content);
+  }
+
+  async generateQuiz(prompt: string): Promise<QuizGeneration> {
+    return this.generateStrictJson(prompt, quizGenerationSchema, '测验题目');
+  }
+
+  async gradeOpenAnswer(prompt: string): Promise<OpenAnswerGrading> {
+    return this.generateStrictJson(prompt, openAnswerGradingSchema, '开放题批改');
+  }
+
+  async generateTransfer(prompt: string): Promise<TransferGeneration> {
+    return this.generateStrictJson(prompt, transferGenerationSchema, '迁移应用题');
+  }
+
+  async gradeTransfer(prompt: string): Promise<TransferGrading> {
+    return this.generateStrictJson(prompt, transferGradingSchema, '迁移应用批改');
+  }
+
+  async generateStepSummary(prompt: string): Promise<StepSummaryGeneration> {
+    return this.generateStrictJson(prompt, stepSummarySchema, '学习总结');
   }
 
   /**
@@ -336,6 +395,40 @@ export class AiService {
 
     if (!providerConfig.apiKey) {
       throw new ServiceUnavailableException(providerConfig.missingKeyMessage);
+    }
+  }
+
+  private async generateStrictJson<T>(
+    prompt: string,
+    schema: z.ZodType<T>,
+    label: string,
+  ): Promise<T> {
+    this.ensureApiKey();
+
+    const completion = await this.openai.chat.completions.create({
+      model: this.model,
+      temperature: 0.3,
+      messages: [
+        {
+          role: 'system',
+          content: 'You generate strict JSON only. Do not include Markdown fences or prose.',
+        },
+        { role: 'user', content: prompt },
+      ],
+    });
+
+    const content = completion.choices[0]?.message.content;
+    if (!content) {
+      throw new BadGatewayException(`LLM 没有返回可解析的${label}内容。`);
+    }
+
+    try {
+      return schema.parse(JSON.parse(stripJsonFence(content)));
+    } catch (error) {
+      throw new BadGatewayException({
+        message: `LLM 返回了不合法的${label} JSON。`,
+        detail: error instanceof Error ? error.message : 'Unknown parse error',
+      });
     }
   }
 

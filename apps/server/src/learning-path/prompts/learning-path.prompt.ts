@@ -22,8 +22,8 @@ export function buildLearningPathPrompt(input: GenerateLearningPathInput) {
 3. 每个 step 都应该能被用户完成。
 4. 路径应该符合用户的 teachingStrategy。
 5. 如果 teachingStrategy 是 first_principles，要按照"为什么需要 → 出现什么问题 → 如何解决 → 形成什么机制"的逻辑组织。
-6. 如果 assessmentMethods 包含 teach_back，最后一个 step 应该包含"用自己的话讲一遍"。
-7. 如果 assessmentMethods 包含 interview_question，路径中应该包含面试验证。
+6. assessmentMethods 只代表每个 Step 完成后的独立验证流程，不要把复述、小测、面试题或实践任务生成为单独的学习 Step。
+7. 每个 step 应该是知识点、能力点或项目推进节点，不要是"用自己的话讲一遍"这类验证动作。
 8. steps 数量必须在 4-7 个之间。
 9. finalOutcome 必须具体、可验证。
 10. estimatedMinutes 必须合理，单位为分钟。
