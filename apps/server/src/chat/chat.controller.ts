@@ -115,6 +115,7 @@ export class ChatController {
     res.flushHeaders?.();
 
     try {
+      let draftWriteCounter = 0;
       for await (const content of this.chatService.streamSession(
         input,
         prepared.messages,
@@ -124,7 +125,9 @@ export class ChatController {
           return;
         }
         assistantContent = appendMessageDelta(assistantContent, content);
-        await this.chatService.updateAssistantDraft(assistantDraft.id, assistantContent);
+        if (++draftWriteCounter % 20 === 0) {
+          void this.chatService.updateAssistantDraft(assistantDraft.id, assistantContent);
+        }
         writeSse(res, { type: 'delta', content });
       }
 

@@ -15,6 +15,7 @@ import type {
   Transfer,
 } from '@pathmind/shared';
 import { AiService } from '../ai/ai.service.js';
+import { DEV_USER_ID } from '../config/constants.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type {
   GenerateQuizDto,
@@ -30,8 +31,6 @@ import {
   buildStepSummaryPrompt,
   buildTransferPrompt,
 } from './prompts/verification.prompt.js';
-
-const DEV_USER_ID = 'local-dev-user';
 
 @Injectable()
 export class VerificationService {
@@ -245,20 +244,22 @@ export class VerificationService {
   }
 
   async generateSummary(stepId: string, input: GenerateSummaryDto): Promise<StepSummary> {
-    const context = await this.getStepContext(input.goalId, stepId);
-    const quiz = await this.prisma.quiz.findFirst({
-      where: { stepId, goalId: input.goalId },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        questions: { orderBy: { order: 'asc' } },
-        attempts: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          include: { answers: true },
+    const [context, quiz, transfer] = await Promise.all([
+      this.getStepContext(input.goalId, stepId),
+      this.prisma.quiz.findFirst({
+        where: { stepId, goalId: input.goalId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          questions: { orderBy: { order: 'asc' } },
+          attempts: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: { answers: true },
+          },
         },
-      },
-    });
-    const transfer = await this.prisma.transfer.findUnique({ where: { stepId } });
+      }),
+      this.prisma.transfer.findUnique({ where: { stepId } }),
+    ]);
     const latestAttempt = quiz?.attempts[0];
 
     if (!quiz || !latestAttempt || !transfer?.userAnswer || !transfer.aiFeedback) {
@@ -342,20 +343,22 @@ export class VerificationService {
   }
 
   private async buildVerification(stepId: string): Promise<StepVerification> {
-    const quiz = await this.prisma.quiz.findFirst({
-      where: { stepId },
-      orderBy: { createdAt: 'desc' },
-      include: {
-        questions: { orderBy: { order: 'asc' } },
-        attempts: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          include: { answers: true },
+    const [quiz, transfer, summary] = await Promise.all([
+      this.prisma.quiz.findFirst({
+        where: { stepId },
+        orderBy: { createdAt: 'desc' },
+        include: {
+          questions: { orderBy: { order: 'asc' } },
+          attempts: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            include: { answers: true },
+          },
         },
-      },
-    });
-    const transfer = await this.prisma.transfer.findUnique({ where: { stepId } });
-    const summary = await this.prisma.stepSummary.findUnique({ where: { stepId } });
+      }),
+      this.prisma.transfer.findUnique({ where: { stepId } }),
+      this.prisma.stepSummary.findUnique({ where: { stepId } }),
+    ]);
     const latestAttempt = quiz?.attempts[0];
 
     return {

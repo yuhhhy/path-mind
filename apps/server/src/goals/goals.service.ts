@@ -1,12 +1,11 @@
 import { BadRequestException, Inject, Injectable, NotFoundException } from '@nestjs/common';
 import type { Goal } from '@pathmind/shared';
+import { DEV_USER_ID } from '../config/constants.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { VerificationService } from '../verification/verification.service.js';
 import type { CreateGoalDto } from './dto/create-goal.dto.js';
 import { completeStepProgress } from './utils/goal-progress.js';
 import { toSharedGoal } from './utils/goal.mapper.js';
-
-const DEV_USER_ID = 'local-dev-user';
 
 @Injectable()
 export class GoalsService {

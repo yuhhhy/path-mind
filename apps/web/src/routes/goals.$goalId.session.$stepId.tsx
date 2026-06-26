@@ -3,8 +3,7 @@ import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { Brain, CheckCircle2, FileText, GitBranch, ListChecks } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { runQueuedAIGenerationTask } from '../features/ai-generation/aiGenerationQueue';
-import { useAIGenerationStore } from '../features/ai-generation/aiGenerationStore';
+import { useTrackedMutation } from '../features/ai-generation/useTrackedMutation';
 import { ChatPanel } from '../features/chat/ChatPanel';
 import {
   completeStep,
@@ -44,10 +43,6 @@ const stages: Array<{
   { id: 'summary', label: '总结', icon: FileText },
 ];
 
-function getErrorMessage(error: unknown) {
-  return error instanceof Error ? error.message : 'AI 生成失败，请稍后重试。';
-}
-
 function LearningSessionPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -64,9 +59,6 @@ function LearningSessionPage() {
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
   const [transferDraft, setTransferDraft] = useState('');
   const step = goal?.steps.find((item) => item.id === stepId);
-  const upsertTask = useAIGenerationStore((state) => state.upsertTask);
-  const setTaskStatus = useAIGenerationStore((state) => state.setTaskStatus);
-  const setPanelOpen = useAIGenerationStore((state) => state.setPanelOpen);
 
   const completeStepMutation = useMutation({
     mutationFn: (options: { force?: boolean } = {}) => completeStep(goalId, stepId, options),
@@ -77,144 +69,65 @@ function LearningSessionPage() {
     },
   });
 
-  const refreshVerification = () =>
-    queryClient.invalidateQueries({ queryKey: verificationOptions.queryKey });
+  const trackedArgs = {
+    scope: { goalId, stepId },
+    stepTitle: step?.title,
+    verificationQueryKey: verificationOptions.queryKey,
+  };
 
-  const generateQuizTaskId = `step:${stepId}:quiz`;
-  const submitQuizTaskId = `step:${stepId}:quiz-review`;
-  const generateTransferTaskId = `step:${stepId}:transfer`;
-  const submitTransferTaskId = `step:${stepId}:transfer-review`;
-  const generateSummaryTaskId = `step:${stepId}:summary`;
-
-  const generateQuizMutation = useMutation({
-    mutationFn: () =>
-      runQueuedAIGenerationTask(generateQuizTaskId, () => generateQuiz({ goalId, stepId })),
-    onMutate() {
-      upsertTask({
-        id: generateQuizTaskId,
-        title: '生成综合测验',
-        description: step?.title ?? '当前学习 Step',
-        status: 'queued',
-        scope: { goalId, stepId },
-      });
-      setPanelOpen(true);
-    },
+  const generateQuizMutation = useTrackedMutation({
+    ...trackedArgs,
+    taskId: `step:${stepId}:quiz`,
+    title: '生成综合测验',
+    run: () => generateQuiz({ goalId, stepId }),
+    successDescription: (quiz) => `已生成 ${quiz.questions.length} 道题`,
     onSuccess(quiz) {
-      setTaskStatus(generateQuizTaskId, 'done', {
-        description: `已生成 ${quiz.questions.length} 道题`,
-      });
       setQuizAnswers(Object.fromEntries(quiz.questions.map((question) => [question.id, ''])));
-      void refreshVerification();
-    },
-    onError(error) {
-      setTaskStatus(generateQuizTaskId, 'failed', { error: getErrorMessage(error) });
     },
   });
 
-  const submitQuizMutation = useMutation({
-    mutationFn: () =>
-      runQueuedAIGenerationTask(submitQuizTaskId, () => {
-        if (!verification?.quiz) {
-          throw new Error('请先生成测验。');
-        }
-        return submitQuizAttempt({
-          quizId: verification.quiz.id,
-          answers: verification.quiz.questions.map((question) => ({
-            questionId: question.id,
-            answer: quizAnswers[question.id]?.trim() ?? '',
-          })),
-        });
-      }),
-    onMutate() {
-      upsertTask({
-        id: submitQuizTaskId,
-        title: '批改综合测验',
-        description: step?.title ?? '当前学习 Step',
-        status: 'queued',
-        scope: { goalId, stepId },
+  const submitQuizMutation = useTrackedMutation({
+    ...trackedArgs,
+    taskId: `step:${stepId}:quiz-review`,
+    title: '批改综合测验',
+    run: () => {
+      if (!verification?.quiz) throw new Error('请先生成测验。');
+      return submitQuizAttempt({
+        quizId: verification.quiz.id,
+        answers: verification.quiz.questions.map((question) => ({
+          questionId: question.id,
+          answer: quizAnswers[question.id]?.trim() ?? '',
+        })),
       });
-      setPanelOpen(true);
     },
-    onSuccess() {
-      setTaskStatus(submitQuizTaskId, 'done', { description: '测验批改完成' });
-      void refreshVerification();
-    },
-    onError(error) {
-      setTaskStatus(submitQuizTaskId, 'failed', { error: getErrorMessage(error) });
-    },
+    successDescription: '测验批改完成',
   });
 
-  const generateTransferMutation = useMutation({
-    mutationFn: () =>
-      runQueuedAIGenerationTask(generateTransferTaskId, () => generateTransfer({ goalId, stepId })),
-    onMutate() {
-      upsertTask({
-        id: generateTransferTaskId,
-        title: '生成迁移应用题',
-        description: step?.title ?? '当前学习 Step',
-        status: 'queued',
-        scope: { goalId, stepId },
-      });
-      setPanelOpen(true);
-    },
-    onSuccess() {
-      setTaskStatus(generateTransferTaskId, 'done', { description: '迁移应用题已生成' });
-      void refreshVerification();
-    },
-    onError(error) {
-      setTaskStatus(generateTransferTaskId, 'failed', { error: getErrorMessage(error) });
-    },
+  const generateTransferMutation = useTrackedMutation({
+    ...trackedArgs,
+    taskId: `step:${stepId}:transfer`,
+    title: '生成迁移应用题',
+    run: () => generateTransfer({ goalId, stepId }),
+    successDescription: '迁移应用题已生成',
   });
 
-  const submitTransferMutation = useMutation({
-    mutationFn: () =>
-      runQueuedAIGenerationTask(submitTransferTaskId, () =>
-        submitTransfer({ goalId, stepId, content: transferDraft.trim() }),
-      ),
-    onMutate() {
-      upsertTask({
-        id: submitTransferTaskId,
-        title: '评价迁移应用',
-        description: step?.title ?? '当前学习 Step',
-        status: 'queued',
-        scope: { goalId, stepId },
-      });
-      setPanelOpen(true);
-    },
+  const submitTransferMutation = useTrackedMutation({
+    ...trackedArgs,
+    taskId: `step:${stepId}:transfer-review`,
+    title: '评价迁移应用',
+    run: () => submitTransfer({ goalId, stepId, content: transferDraft.trim() }),
+    successDescription: '迁移应用评价完成',
     onSuccess() {
-      setTaskStatus(submitTransferTaskId, 'done', { description: '迁移应用评价完成' });
       setTransferDraft('');
-      void refreshVerification();
-    },
-    onError(error) {
-      setTaskStatus(submitTransferTaskId, 'failed', {
-        error: getErrorMessage(error),
-      });
     },
   });
 
-  const generateSummaryMutation = useMutation({
-    mutationFn: () =>
-      runQueuedAIGenerationTask(generateSummaryTaskId, () =>
-        generateStepSummary({ goalId, stepId }),
-      ),
-    onMutate() {
-      upsertTask({
-        id: generateSummaryTaskId,
-        title: '生成本节总结',
-        description: step?.title ?? '当前学习 Step',
-        status: 'queued',
-        scope: { goalId, stepId },
-      });
-      setPanelOpen(true);
-    },
-    onSuccess() {
-      setTaskStatus(generateSummaryTaskId, 'done', { description: '本节总结已生成' });
-      void refreshVerification();
-    },
-    onError(error) {
-      setTaskStatus(generateSummaryTaskId, 'failed', { error: getErrorMessage(error) });
-    },
+  const generateSummaryMutation = useTrackedMutation({
+    ...trackedArgs,
+    taskId: `step:${stepId}:summary`,
+    title: '生成本节总结',
+    run: () => generateStepSummary({ goalId, stepId }),
+    successDescription: '本节总结已生成',
   });
 
   // Auto-generate quiz when entering quiz stage

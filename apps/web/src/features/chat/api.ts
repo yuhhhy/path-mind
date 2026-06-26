@@ -1,4 +1,9 @@
-import type { ChatMessage, ChatSessionInput } from '@pathmind/shared';
+import type {
+  ChatMessage,
+  ChatSessionInput,
+  TeachingGenerationStatus,
+  TeachingGenerationStatusItem,
+} from '@pathmind/shared';
 import { parseSseEvent } from './sse';
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
@@ -15,12 +20,7 @@ export interface StreamChatSessionInput extends ChatSessionInput {
   continueAssistantMessageId?: string;
 }
 
-export type TeachingGenerationStatus = 'queued' | 'running' | 'done';
-
-export interface TeachingGenerationStatusItem {
-  stepId: string;
-  status: TeachingGenerationStatus;
-}
+export type { TeachingGenerationStatus, TeachingGenerationStatusItem };
 
 export async function getChatSession(
   goalId: string,

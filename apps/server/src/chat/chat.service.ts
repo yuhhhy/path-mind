@@ -1,22 +1,20 @@
 import { Inject, Injectable } from '@nestjs/common';
-import type { ChatMessage } from '@pathmind/shared';
+import type {
+  ChatMessage,
+  TeachingGenerationStatus,
+  TeachingGenerationStatusItem,
+} from '@pathmind/shared';
 import { AiService } from '../ai/ai.service.js';
+import { DEV_USER_ID } from '../config/constants.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { ChatSessionDto } from './dto/chat-session.dto.js';
 import { buildChatCoachPrompt } from './prompts/chat-coach.prompt.js';
-
-const DEV_USER_ID = 'local-dev-user';
 
 function isAutoStartMessage(content: string) {
   return /^请开始当前 Step「.+」的教学。$/.test(content);
 }
 
-export type TeachingGenerationStatus = 'queued' | 'running' | 'done';
-
-export interface TeachingGenerationStatusItem {
-  stepId: string;
-  status: TeachingGenerationStatus;
-}
+export type { TeachingGenerationStatus, TeachingGenerationStatusItem };
 
 @Injectable()
 export class ChatService {

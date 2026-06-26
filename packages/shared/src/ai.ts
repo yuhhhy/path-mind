@@ -37,3 +37,10 @@ export interface ChatSessionInput {
   step: LearningStep;
   messages: ChatMessage[];
 }
+
+export type TeachingGenerationStatus = 'queued' | 'running' | 'done';
+
+export interface TeachingGenerationStatusItem {
+  stepId: string;
+  status: TeachingGenerationStatus;
+}
