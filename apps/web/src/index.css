@@ -31,10 +31,6 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-html {
-  scrollbar-gutter: stable;
-}
-
 a {
   text-decoration: none;
 }
@@ -44,6 +40,8 @@ a {
   outline-offset: 2px;
 }
 
-button {
-  font: inherit;
+@layer base {
+  button {
+    font: inherit;
+  }
 }

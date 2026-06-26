@@ -278,7 +278,7 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
               className="min-w-0 flex-1 rounded-md border border-gray-200 px-3 text-sm outline-none transition-colors placeholder:text-gray-400 focus:border-blue-500"
               disabled={isStreaming}
               onChange={(event) => setDraft(event.target.value)}
-              placeholder="追问一句，比如：这里为什么需要 DNS？"
+              placeholder="追问一句"
               value={draft}
             />
             <Button

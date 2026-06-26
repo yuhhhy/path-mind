@@ -42,8 +42,8 @@ export function FeedbackList({ items, title }: { items: string[]; title: string 
   if (items.length === 0) return null;
 
   return (
-    <div className="mt-4">
-      <p className="text-xs font-medium uppercase tracking-wider text-gray-400">{title}</p>
+    <div className="mt-6">
+      <p className="text-sm font-medium uppercase tracking-wider text-gray-400">{title}</p>
       <ul className="mt-2 space-y-1 text-sm leading-6 text-gray-700">
         {items.map((item) => (
           <li className="flex gap-2" key={item}>
@@ -94,13 +94,13 @@ function AttemptFeedback({
   return (
     <div
       className={
-        'mt-3 rounded-md border px-3 py-2 text-sm ' +
-        (answer.isCorrect
-          ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
-          : 'border-amber-100 bg-amber-50 text-amber-800')
+        'mt-3 rounded-md border px-3 py-2 ' +
+        (answer.isCorrect ? 'border-emerald-100 bg-emerald-50' : 'border-amber-100 bg-amber-50')
       }
     >
-      {answer.feedback}
+      <Suspense fallback={<p className="text-sm text-gray-400">渲染中...</p>}>
+        <MarkdownRenderer content={answer.feedback} />
+      </Suspense>
     </div>
   );
 }
@@ -273,12 +273,14 @@ export function TransferSection({
           )}
         </div>
       ) : (
-        <div className="mt-5 space-y-4">
-          <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-blue-400">场景题目</p>
-            <p className="mt-2 text-sm leading-relaxed text-blue-900 whitespace-pre-wrap">
-              {transfer.prompt}
-            </p>
+        <div className="mt-5 space-y-6">
+          <div>
+            <p className="text-sm font-medium uppercase tracking-wider text-gray-400">场景题目</p>
+            <div className="mt-2">
+              <Suspense fallback={<p className="text-sm text-gray-400">渲染中...</p>}>
+                <MarkdownRenderer content={transfer.prompt} />
+              </Suspense>
+            </div>
           </div>
 
           {!transfer.userAnswer ? (
@@ -300,26 +302,32 @@ export function TransferSection({
               {submitError && <ErrorMessage message={submitError} />}
             </form>
           ) : (
-            <div className="space-y-3">
-              <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wider text-gray-400">
+            <div className="space-y-5">
+              <div className="rounded-lg border border-orange-100 bg-orange-50 p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-orange-400">
                   你的回答
                 </p>
-                <p className="mt-2 text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
+                <p className="mt-2 text-sm leading-relaxed text-orange-900 whitespace-pre-wrap">
                   {transfer.userAnswer}
                 </p>
               </div>
               {transfer.aiFeedback && (
-                <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <p className="text-sm font-semibold text-gray-900">AI 反馈</p>
+                <div>
+                  <div className="flex items-center gap-3">
+                    <p className="text-sm font-medium uppercase tracking-wider text-blue-400">
+                      AI 反馈
+                    </p>
                     {transfer.score !== undefined && (
                       <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700">
                         {transfer.score} 分
                       </span>
                     )}
                   </div>
-                  <p className="mt-3 text-sm leading-6 text-gray-700">{transfer.aiFeedback}</p>
+                  <div className="mt-3">
+                    <Suspense fallback={<p className="text-sm text-gray-400">渲染中...</p>}>
+                      <MarkdownRenderer content={transfer.aiFeedback} />
+                    </Suspense>
+                  </div>
                 </div>
               )}
             </div>
@@ -366,11 +374,9 @@ export function SummarySection({
         </Button>
       ) : (
         <div className="mt-5 space-y-4">
-          <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-            <Suspense fallback={<p className="text-gray-400">渲染中...</p>}>
-              <MarkdownRenderer content={summary.content} />
-            </Suspense>
-          </div>
+          <Suspense fallback={<p className="text-sm text-gray-400">渲染中...</p>}>
+            <MarkdownRenderer content={summary.content} />
+          </Suspense>
           <FeedbackList title="关键收获" items={summary.keyTakeaways} />
           <FeedbackList title="薄弱点" items={summary.weakPoints} />
           <FeedbackList title="下一步建议" items={summary.nextSuggestions} />

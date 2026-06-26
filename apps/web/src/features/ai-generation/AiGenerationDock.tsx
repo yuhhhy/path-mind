@@ -84,13 +84,11 @@ export function AiGenerationDock() {
                   <Brain size={15} className="text-blue-600" />
                   <h2 className="text-sm font-semibold text-gray-900">AI 生成任务</h2>
                 </div>
-                <p className="mt-1 truncate text-xs text-gray-500">
-                  {currentTask
-                    ? currentTask.title
-                    : hasTasks
-                      ? '暂无执行中的任务'
-                      : '还没有生成任务'}
-                </p>
+                {(currentTask || !hasTasks) && (
+                  <p className="mt-1 truncate text-xs text-gray-500">
+                    {currentTask ? currentTask.title : '还没有生成任务'}
+                  </p>
+                )}
               </div>
               <button
                 aria-label="关闭 AI 生成任务面板"
@@ -115,7 +113,7 @@ export function AiGenerationDock() {
             )}
           </div>
 
-          <div className="max-h-[420px] overflow-y-auto px-3 py-3">
+          <div className="max-h-[420px] overflow-y-auto px-3 py-3 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {!hasTasks ? (
               <div className="py-10 text-center">
                 <ListChecks size={28} className="mx-auto text-gray-300" />

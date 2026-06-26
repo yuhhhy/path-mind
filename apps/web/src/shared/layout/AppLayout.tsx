@@ -146,7 +146,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           )}
         </header>
 
-        <main className="flex-1 overflow-y-auto bg-white">
+        <main className="flex-1 overflow-y-auto bg-white [scrollbar-gutter:stable]">
           <BreadcrumbContext value={ctxValue}>
             <div className="mx-auto max-w-6xl px-8 py-8">{children}</div>
           </BreadcrumbContext>
