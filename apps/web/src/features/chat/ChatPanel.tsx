@@ -114,7 +114,7 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
       });
       setPanelOpen(true);
 
-      await streamChatSession(
+      streamChatSession(
         {
           goal,
           step,
@@ -181,7 +181,10 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
       }
     }, 0);
 
-    return () => window.clearTimeout(startTimer);
+    return () => {
+      window.clearTimeout(startTimer);
+      autoStartKeyRef.current = '';
+    };
   }, [chatQuery.data, chatQuery.isLoading, goal.id, isStreaming, runSession, step.id, step.title]);
 
   const handleStart = () => {

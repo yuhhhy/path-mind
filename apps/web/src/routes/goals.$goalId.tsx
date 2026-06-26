@@ -87,8 +87,12 @@ function GoalDetailPage() {
         (currentGoal?.steps ?? []).map((step, index) => [step.id, index + 1]),
       );
       setIsStreaming(true);
-      setTaskStatus('goal:path:queued', 'running', {
+      upsertTask({
+        id: 'goal:path:queued',
+        title: '生成学习路径',
         description: `正在生成「${goalTitle}」的学习路径`,
+        status: 'running',
+        scope: { goalId },
       });
       upsertTask({
         id: `goal:${goalId}:outline`,
@@ -257,6 +261,7 @@ function GoalDetailPage() {
   }
 
   const isInitializing = goal.status === 'initializing';
+  const isFailed = goal.status === 'failed';
   const displayedGoal: Goal = { ...goal, steps: displayedSteps };
   const isPathGenerating = isInitializing || isStreaming;
 
@@ -396,6 +401,11 @@ function GoalDetailPage() {
 
       <section className="space-y-3">
         <p className="text-xs font-medium uppercase tracking-wider text-gray-400">学习路径</p>
+        {isFailed && (
+          <div className="rounded-md border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700">
+            学习路径生成失败，请删除本目标后重新创建。
+          </div>
+        )}
         <div className="grid gap-6 lg:grid-cols-[1fr_260px] lg:items-start">
           {isPathGenerating ? (
             <div className="space-y-2">

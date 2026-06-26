@@ -8,72 +8,33 @@ import { ConfigService } from '@nestjs/config';
 import type { ChatMessage, GenerateLearningPathOutput } from '@pathmind/shared';
 import type { OpenAI } from 'openai';
 import type { ChatCompletionMessageParam } from 'openai/resources/chat/completions';
-import { z } from 'zod';
+import type { z } from 'zod';
+import {
+  learningPathOutputSchema,
+  openAnswerGradingSchema,
+  quizGenerationSchema,
+  stepSummarySchema,
+  streamStepSchema,
+  transferGradingSchema,
+  transferGenerationSchema,
+} from './ai.schemas.js';
+import type {
+  OpenAnswerGrading,
+  QuizGeneration,
+  StepSummaryGeneration,
+  TransferGeneration,
+  TransferGrading,
+} from './ai.schemas.js';
 import { AI_CLIENT } from './openai.client.js';
 import { getAiProviderConfig } from './provider-config.js';
 
-// Used for streaming incremental step detection (id is optional — we assign our own)
-const streamStepSchema = z.object({
-  id: z.string().optional(),
-  title: z.string().min(1),
-  description: z.string().min(1),
-  estimatedMinutes: z.number().int().positive(),
-});
-
-// Used for the non-streaming full-JSON parse path
-const fullStepSchema = z.object({
-  id: z.string().min(1),
-  title: z.string().min(1),
-  description: z.string().min(1),
-  estimatedMinutes: z.number().int().positive(),
-});
-
-const learningPathOutputSchema = z.object({
-  title: z.string().min(1),
-  description: z.string().min(1),
-  estimatedMinutes: z.number().int().positive(),
-  finalOutcome: z.array(z.string().min(1)).min(1),
-  steps: z.array(fullStepSchema).min(4).max(7),
-});
-
-const quizQuestionSchema = z.object({
-  type: z.enum(['explain_back', 'single_choice', 'scenario_question']),
-  question: z.string().min(1),
-  options: z.array(z.string().min(1)).optional(),
-  correctAnswer: z.string().min(1),
-  explanation: z.string().min(1),
-});
-
-const quizGenerationSchema = z.object({
-  questions: z.array(quizQuestionSchema).min(3).max(4),
-});
-
-const openAnswerGradingSchema = z.object({
-  isCorrect: z.boolean(),
-  feedback: z.string().min(1),
-});
-
-const transferGenerationSchema = z.object({
-  prompt: z.string().min(1),
-});
-
-const transferGradingSchema = z.object({
-  score: z.number().int().min(0).max(100),
-  feedback: z.string().min(1),
-});
-
-const stepSummarySchema = z.object({
-  content: z.string().min(1),
-  keyTakeaways: z.array(z.string().min(1)),
-  weakPoints: z.array(z.string().min(1)),
-  nextSuggestions: z.array(z.string().min(1)),
-});
-
-export type QuizGeneration = z.infer<typeof quizGenerationSchema>;
-export type OpenAnswerGrading = z.infer<typeof openAnswerGradingSchema>;
-export type TransferGeneration = z.infer<typeof transferGenerationSchema>;
-export type TransferGrading = z.infer<typeof transferGradingSchema>;
-export type StepSummaryGeneration = z.infer<typeof stepSummarySchema>;
+export type {
+  OpenAnswerGrading,
+  QuizGeneration,
+  StepSummaryGeneration,
+  TransferGeneration,
+  TransferGrading,
+} from './ai.schemas.js';
 
 export type StreamedPathEvent =
   | {
@@ -164,10 +125,8 @@ export class AiService {
   ) {}
 
   async generateLearningPath(prompt: string): Promise<GenerateLearningPathOutput> {
-    this.ensureApiKey();
-
     const completion = await this.openai.chat.completions.create({
-      model: this.model,
+      model: this.checkedModel,
       temperature: 0.4,
       messages: [
         {
@@ -219,11 +178,9 @@ export class AiService {
     prompt: string,
     signal?: AbortSignal,
   ): AsyncGenerator<StreamedPathEvent> {
-    this.ensureApiKey();
-
     const stream = await this.openai.chat.completions.create(
       {
-        model: this.model,
+        model: this.checkedModel,
         temperature: 0.4,
         stream: true,
         messages: [
@@ -358,8 +315,6 @@ export class AiService {
     messages: ChatMessage[],
     signal?: AbortSignal,
   ): AsyncGenerator<string> {
-    this.ensureApiKey();
-
     const normalizedMessages: ChatCompletionMessageParam[] = [
       { role: 'system', content: systemPrompt },
       ...messages.map((message) => ({
@@ -370,7 +325,7 @@ export class AiService {
 
     const stream = await this.openai.chat.completions.create(
       {
-        model: this.model,
+        model: this.checkedModel,
         temperature: 0.5,
         stream: true,
         messages: normalizedMessages,
@@ -386,16 +341,13 @@ export class AiService {
     }
   }
 
-  private get model() {
-    return getAiProviderConfig(this.config).model;
-  }
-
-  private ensureApiKey() {
+  /** Returns the model string after verifying the API key is present. */
+  private get checkedModel(): string {
     const providerConfig = getAiProviderConfig(this.config);
-
     if (!providerConfig.apiKey) {
       throw new ServiceUnavailableException(providerConfig.missingKeyMessage);
     }
+    return providerConfig.model;
   }
 
   private async generateStrictJson<T>(
@@ -403,8 +355,7 @@ export class AiService {
     schema: z.ZodType<T>,
     label: string,
   ): Promise<T> {
-    this.ensureApiKey();
-
+    const model = this.checkedModel;
     const systemMessage: ChatCompletionMessageParam = {
       role: 'system',
       content: 'You generate strict JSON only. Do not include Markdown fences or prose.',
@@ -418,7 +369,7 @@ export class AiService {
 
     for (let attempt = 0; attempt < 2; attempt++) {
       const completion = await this.openai.chat.completions.create({
-        model: this.model,
+        model,
         temperature: attempt === 0 ? 0.3 : 0,
         messages,
       });

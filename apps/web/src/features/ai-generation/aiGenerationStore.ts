@@ -21,6 +21,8 @@ type TaskInput = Omit<AIGenerationTask, 'createdAt' | 'updatedAt'> & {
   updatedAt?: number;
 };
 
+const MAX_TASKS = 50;
+
 interface AIGenerationState {
   tasks: AIGenerationTask[];
   isPanelOpen: boolean;
@@ -42,16 +44,24 @@ export const useAIGenerationStore = create<AIGenerationState>((set) => ({
       const now = Date.now();
       const existing = state.tasks.find((item) => item.id === task.id);
       if (!existing) {
-        return {
-          tasks: [
-            {
-              ...task,
-              createdAt: task.createdAt ?? now,
-              updatedAt: task.updatedAt ?? now,
-            },
-            ...state.tasks,
-          ],
-        };
+        const next = [
+          {
+            ...task,
+            createdAt: task.createdAt ?? now,
+            updatedAt: task.updatedAt ?? now,
+          },
+          ...state.tasks,
+        ];
+        // Keep at most MAX_TASKS, dropping oldest settled tasks first (FIFO by updatedAt)
+        if (next.length > MAX_TASKS) {
+          const settled = next
+            .map((t, i) => ({ t, i }))
+            .filter(({ t }) => t.status === 'done' || t.status === 'failed')
+            .sort((a, b) => a.t.updatedAt - b.t.updatedAt);
+          const toRemove = new Set(settled.slice(0, next.length - MAX_TASKS).map(({ i }) => i));
+          return { tasks: next.filter((_, i) => !toRemove.has(i)) };
+        }
+        return { tasks: next };
       }
 
       return {

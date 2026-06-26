@@ -14,6 +14,8 @@ export function getAiProviderConfig(config: ConfigService): AiProviderConfig {
   const openAiKey = config.get<string>('OPENAI_API_KEY');
   const deepSeekKey = config.get<string>('DEEPSEEK_API_KEY');
 
+  // Prefer OpenAI if its key is present (or if neither key is set — missing key
+  // is surfaced later by checkedModel when an actual AI call is made).
   if (openAiKey || !deepSeekKey) {
     return {
       provider: 'openai',

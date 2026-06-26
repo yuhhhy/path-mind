@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { mockGoals } from './mockGoals';
 import type { GenerateLearningPathInput, GenerateLearningPathOutput, Goal } from './types';
 
 interface GoalStore {
@@ -25,7 +24,7 @@ function slugify(value: string) {
 }
 
 export const useGoalStore = create<GoalStore>((set, get) => ({
-  goals: mockGoals,
+  goals: [],
   getGoalById: (goalId) => get().goals.find((goal) => goal.id === goalId),
   addGoal: (goal) => {
     set((state) => ({ goals: [goal, ...state.goals] }));

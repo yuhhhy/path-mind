@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { Brain, CheckCircle2, FileText, GitBranch, ListChecks } from 'lucide-react';
 import type { FormEvent } from 'react';
-import { Suspense, lazy, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTrackedMutation } from '../features/ai-generation/useTrackedMutation';
 import { ChatPanel } from '../features/chat/ChatPanel';
 import {
@@ -19,12 +19,15 @@ import {
   goalsQueryOptions,
   stepVerificationQueryOptions,
 } from '../features/goal/queries';
+import {
+  ErrorMessage,
+  ProgressLine,
+  QuizSection,
+  SummarySection,
+  TransferSection,
+} from '../features/verification/VerificationUI';
 import { useBreadcrumb } from '../shared/layout/BreadcrumbContext';
 import { Button } from '../shared/ui/Button';
-
-const MarkdownRenderer = lazy(() =>
-  import('../features/chat/MarkdownRenderer').then((m) => ({ default: m.MarkdownRenderer })),
-);
 
 export const Route = createFileRoute('/goals/$goalId/session/$stepId')({
   component: LearningSessionPage,
@@ -260,232 +263,55 @@ function LearningSessionPage() {
           {activeStage === 'learning' && <ChatPanel goal={goal} step={step} />}
 
           {activeStage === 'quiz' && (
-            <section className="rounded-lg border border-gray-200 bg-white p-6">
-              <SectionHeader
-                description="完成以下三类题目：整体理解复述、概念判断、场景应用。"
-                label="Quiz"
-                title="综合测验"
-              />
-              {!verification?.quiz ? (
-                <div className="mt-5">
-                  {generateQuizMutation.isError ? (
-                    <div className="space-y-3">
-                      <ErrorMessage message={generateQuizMutation.error.message} />
-                      <Button onClick={() => generateQuizMutation.mutate()} size="md">
-                        重试
-                      </Button>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-400">AI 正在生成测验题目...</p>
-                  )}
-                </div>
-              ) : (
-                <form className="mt-5 divide-y divide-gray-100" onSubmit={handleQuizSubmit}>
-                  {verification.quiz.questions.map((question, index) => (
-                    <div className="py-5 first:pt-0" key={question.id}>
-                      <div className="mb-2">
-                        <QuestionTypeBadge type={question.type} />
-                      </div>
-                      <p className="text-sm font-semibold text-gray-900">
-                        {index + 1}. {question.question}
-                      </p>
-                      {question.type === 'single_choice' ? (
-                        <div className="mt-3 space-y-2">
-                          {question.options?.map((option) => (
-                            <label
-                              className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md bg-gray-50 px-3 text-sm text-gray-700 transition-colors hover:bg-gray-100"
-                              key={option}
-                            >
-                              <input
-                                checked={quizAnswers[question.id] === option}
-                                className="size-4"
-                                name={question.id}
-                                onChange={() =>
-                                  setQuizAnswers((current) => ({
-                                    ...current,
-                                    [question.id]: option,
-                                  }))
-                                }
-                                type="radio"
-                              />
-                              <span>{option}</span>
-                            </label>
-                          ))}
-                        </div>
-                      ) : (
-                        <textarea
-                          className="mt-3 min-h-28 w-full resize-y rounded-md border border-gray-200 px-3 py-2 text-sm leading-6 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-500"
-                          onChange={(event) =>
-                            setQuizAnswers((current) => ({
-                              ...current,
-                              [question.id]: event.target.value,
-                            }))
-                          }
-                          placeholder={
-                            question.type === 'explain_back'
-                              ? '用自己的话讲一遍，不要复制 AI 的原文...'
-                              : '结合具体场景分析...'
-                          }
-                          value={quizAnswers[question.id] ?? ''}
-                        />
-                      )}
-                      {verification.latestAttempt?.answers.find(
-                        (answer) => answer.questionId === question.id,
-                      ) && (
-                        <AttemptFeedback
-                          answer={verification.latestAttempt.answers.find(
-                            (item) => item.questionId === question.id,
-                          )}
-                        />
-                      )}
-                    </div>
-                  ))}
-                  <div className="pt-5">
-                    <Button
-                      disabled={
-                        submitQuizMutation.isPending ||
-                        verification.quiz.questions.some(
-                          (question) => !quizAnswers[question.id]?.trim(),
-                        )
-                      }
-                      icon={<CheckCircle2 size={15} />}
-                      size="md"
-                      type="submit"
-                    >
-                      {submitQuizMutation.isPending ? '批改中...' : '提交测验'}
-                    </Button>
-                    {verification.latestAttempt && (
-                      <p className="text-sm font-medium text-gray-700">
-                        最近一次测验得分：{verification.latestAttempt.score} 分
-                      </p>
-                    )}
-                    {submitQuizMutation.isError && (
-                      <ErrorMessage message={submitQuizMutation.error.message} />
-                    )}
-                  </div>
-                </form>
-              )}
-            </section>
+            <QuizSection
+              quiz={verification?.quiz}
+              latestAttempt={verification?.latestAttempt}
+              quizAnswers={quizAnswers}
+              onAnswerChange={(questionId, value) =>
+                setQuizAnswers((current) => ({ ...current, [questionId]: value }))
+              }
+              onSubmit={handleQuizSubmit}
+              isGenerating={generateQuizMutation.isPending}
+              isSubmitting={submitQuizMutation.isPending}
+              generateError={
+                generateQuizMutation.isError ? generateQuizMutation.error.message : undefined
+              }
+              submitError={
+                submitQuizMutation.isError ? submitQuizMutation.error.message : undefined
+              }
+              onRetryGenerate={() => generateQuizMutation.mutate()}
+            />
           )}
 
           {activeStage === 'transfer' && (
-            <section className="rounded-lg border border-gray-200 bg-white p-6">
-              <SectionHeader
-                description="把本节知识迁移到真实场景，考察能否在新情境中运用。"
-                label="Transfer / Application"
-                title="迁移应用"
-              />
-              {!verification?.transfer ? (
-                <div className="mt-5">
-                  {generateTransferMutation.isError ? (
-                    <div className="space-y-3">
-                      <ErrorMessage message={generateTransferMutation.error.message} />
-                      <Button onClick={() => generateTransferMutation.mutate()} size="md">
-                        重试
-                      </Button>
-                    </div>
-                  ) : (
-                    <p className="text-sm text-gray-400">AI 正在生成迁移应用题...</p>
-                  )}
-                </div>
-              ) : (
-                <div className="mt-5 space-y-4">
-                  <div className="rounded-lg border border-blue-100 bg-blue-50 p-4">
-                    <p className="text-xs font-medium uppercase tracking-wider text-blue-400">
-                      场景题目
-                    </p>
-                    <p className="mt-2 text-sm leading-relaxed text-blue-900 whitespace-pre-wrap">
-                      {verification.transfer.prompt}
-                    </p>
-                  </div>
-
-                  {!verification.transfer.userAnswer ? (
-                    <form onSubmit={handleTransferSubmit} className="space-y-4">
-                      <textarea
-                        className="min-h-40 w-full resize-y rounded-md border border-gray-200 px-3 py-2 text-sm leading-6 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-500"
-                        onChange={(event) => setTransferDraft(event.target.value)}
-                        placeholder="基于本节所学，分析场景中的问题..."
-                        value={transferDraft}
-                      />
-                      <Button
-                        disabled={
-                          transferDraft.trim().length < 10 || submitTransferMutation.isPending
-                        }
-                        icon={<GitBranch size={15} />}
-                        size="md"
-                        type="submit"
-                      >
-                        {submitTransferMutation.isPending ? '评价中...' : '提交答案'}
-                      </Button>
-                      {submitTransferMutation.isError && (
-                        <ErrorMessage message={submitTransferMutation.error.message} />
-                      )}
-                    </form>
-                  ) : (
-                    <div className="space-y-3">
-                      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                        <p className="text-xs font-medium uppercase tracking-wider text-gray-400">
-                          你的回答
-                        </p>
-                        <p className="mt-2 text-sm leading-relaxed text-gray-700 whitespace-pre-wrap">
-                          {verification.transfer.userAnswer}
-                        </p>
-                      </div>
-                      {verification.transfer.aiFeedback && (
-                        <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
-                          <div className="flex items-center justify-between gap-3">
-                            <p className="text-sm font-semibold text-gray-900">AI 反馈</p>
-                            {verification.transfer.score !== undefined && (
-                              <span className="rounded-full bg-blue-100 px-2.5 py-1 text-xs font-semibold text-blue-700">
-                                {verification.transfer.score} 分
-                              </span>
-                            )}
-                          </div>
-                          <p className="mt-3 text-sm leading-6 text-gray-700">
-                            {verification.transfer.aiFeedback}
-                          </p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              )}
-            </section>
+            <TransferSection
+              transfer={verification?.transfer}
+              draft={transferDraft}
+              onDraftChange={setTransferDraft}
+              onSubmit={handleTransferSubmit}
+              isGenerating={generateTransferMutation.isPending}
+              isSubmitting={submitTransferMutation.isPending}
+              generateError={
+                generateTransferMutation.isError
+                  ? generateTransferMutation.error.message
+                  : undefined
+              }
+              submitError={
+                submitTransferMutation.isError ? submitTransferMutation.error.message : undefined
+              }
+              onRetryGenerate={() => generateTransferMutation.mutate()}
+            />
           )}
 
           {activeStage === 'summary' && (
-            <section className="rounded-lg border border-gray-200 bg-white p-6">
-              <SectionHeader
-                description="把本节教学、测验和迁移应用沉淀成一份学习总结。"
-                label="Summary"
-                title="本节总结"
-              />
-              {!verification?.summary ? (
-                <Button
-                  className="mt-5"
-                  disabled={generateSummaryMutation.isPending}
-                  icon={<FileText size={15} />}
-                  onClick={() => generateSummaryMutation.mutate()}
-                  size="md"
-                >
-                  {generateSummaryMutation.isPending ? '生成中...' : '生成总结'}
-                </Button>
-              ) : (
-                <div className="mt-5 space-y-4">
-                  <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
-                    <Suspense fallback={<p className="text-gray-400">渲染中...</p>}>
-                      <MarkdownRenderer content={verification.summary.content} />
-                    </Suspense>
-                  </div>
-                  <FeedbackList title="关键收获" items={verification.summary.keyTakeaways} />
-                  <FeedbackList title="薄弱点" items={verification.summary.weakPoints} />
-                  <FeedbackList title="下一步建议" items={verification.summary.nextSuggestions} />
-                </div>
-              )}
-              {generateSummaryMutation.isError && (
-                <ErrorMessage message={generateSummaryMutation.error.message} />
-              )}
-            </section>
+            <SummarySection
+              summary={verification?.summary}
+              isGenerating={generateSummaryMutation.isPending}
+              generateError={
+                generateSummaryMutation.isError ? generateSummaryMutation.error.message : undefined
+              }
+              onGenerate={() => generateSummaryMutation.mutate()}
+            />
           )}
         </main>
 
@@ -565,100 +391,6 @@ function LearningSessionPage() {
           )}
         </aside>
       </div>
-    </div>
-  );
-}
-
-function QuestionTypeBadge({ type }: { type: string }) {
-  const map: Record<string, { label: string; className: string }> = {
-    explain_back: { label: 'Explain Back', className: 'bg-purple-50 text-purple-600' },
-    single_choice: { label: 'Concept Check', className: 'bg-blue-50 text-blue-600' },
-    scenario_question: { label: 'Scenario', className: 'bg-amber-50 text-amber-600' },
-  };
-  const config = map[type] ?? { label: type, className: 'bg-gray-100 text-gray-500' };
-
-  return (
-    <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${config.className}`}>
-      {config.label}
-    </span>
-  );
-}
-
-function SectionHeader({
-  description,
-  label,
-  title,
-}: {
-  description: string;
-  label: string;
-  title: string;
-}) {
-  return (
-    <div className="border-b border-gray-100 pb-5">
-      <p className="text-xs font-medium uppercase tracking-wider text-gray-400">{label}</p>
-      <h2 className="mt-2 text-lg font-semibold text-gray-900">{title}</h2>
-      <p className="mt-1 text-sm leading-relaxed text-gray-500">{description}</p>
-    </div>
-  );
-}
-
-function FeedbackList({ items, title }: { items: string[]; title: string }) {
-  if (items.length === 0) return null;
-
-  return (
-    <div className="mt-4">
-      <p className="text-xs font-medium uppercase tracking-wider text-gray-400">{title}</p>
-      <ul className="mt-2 space-y-1 text-sm leading-6 text-gray-700">
-        {items.map((item) => (
-          <li className="flex gap-2" key={item}>
-            <span className="mt-2 size-1.5 shrink-0 rounded-full bg-gray-300" />
-            <span>{item}</span>
-          </li>
-        ))}
-      </ul>
-    </div>
-  );
-}
-
-function ProgressLine({ done, label }: { done: boolean; label: string }) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className={'size-2 rounded-full ' + (done ? 'bg-emerald-500' : 'bg-gray-200')} />
-      <span>{label}</span>
-    </div>
-  );
-}
-
-function AttemptFeedback({
-  answer,
-}: {
-  answer:
-    | {
-        isCorrect: boolean;
-        feedback: string;
-      }
-    | undefined;
-}) {
-  if (!answer) return null;
-
-  return (
-    <div
-      className={
-        'mt-3 rounded-md border px-3 py-2 text-sm ' +
-        (answer.isCorrect
-          ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
-          : 'border-amber-100 bg-amber-50 text-amber-800')
-      }
-    >
-      {answer.feedback}
-    </div>
-  );
-}
-
-function ErrorMessage({ message }: { message: string }) {
-  return (
-    <div className="mt-3 rounded-md border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-700">
-      {message}
     </div>
   );
 }

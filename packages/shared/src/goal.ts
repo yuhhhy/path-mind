@@ -1,4 +1,4 @@
-export type GoalStatus = 'active' | 'completed' | 'paused' | 'initializing';
+export type GoalStatus = 'active' | 'completed' | 'paused' | 'initializing' | 'failed';
 
 export type GoalType = 'understand_concept' | 'prepare_interview' | 'build_project' | 'pass_exam';
 

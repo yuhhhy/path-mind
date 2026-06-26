@@ -3,19 +3,14 @@ import { Inject, Injectable } from '@nestjs/common';
 import type { GenerateLearningPathOutput, Goal, LearningStep } from '@pathmind/shared';
 import { AiService } from '../ai/ai.service.js';
 import { buildChatCoachPrompt } from '../chat/prompts/chat-coach.prompt.js';
-import type { SseEvent } from '../common/sse/sse.types.js';
-import { formatSseEvent } from '../common/sse/sse.utils.js';
+import { writeSse } from '../common/sse/sse.utils.js';
 import { DEV_USER_ID } from '../config/constants.js';
 import { toSharedGoal } from '../goals/utils/goal.mapper.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { GenerateLearningPathDto } from './dto/generate-learning-path.dto.js';
 import { buildLearningPathPrompt } from './prompts/learning-path.prompt.js';
-const INITIAL_CHAT_PREWARM_CONCURRENCY = 2;
 
-function writeSse(res: ServerResponse, event: SseEvent) {
-  res.write(formatSseEvent(event));
-  (res as ServerResponse & { flush?: () => void }).flush?.();
-}
+const INITIAL_CHAT_PREWARM_CONCURRENCY = 2;
 
 @Injectable()
 export class LearningPathService {
@@ -63,6 +58,13 @@ export class LearningPathService {
       return;
     }
 
+    // Guard: generation previously failed — surface the error to the client.
+    if (goalRecord.status === 'failed') {
+      writeSse(res, { type: 'error', message: '学习路径生成失败，请删除后重新创建。' });
+      res.end();
+      return;
+    }
+
     // Guard: already generated — replay existing steps immediately
     if (goalRecord.status !== 'initializing' && goalRecord.steps.length > 0) {
       for (const step of goalRecord.steps) {
@@ -72,7 +74,7 @@ export class LearningPathService {
             id: step.id,
             title: step.title,
             description: step.description,
-            status: step.status,
+            status: step.status as LearningStep['status'],
             estimatedMinutes: step.estimatedMinutes,
           },
         });
@@ -147,7 +149,7 @@ export class LearningPathService {
               id: step.id,
               title: step.title,
               description: step.description,
-              status: step.status,
+              status: step.status as LearningStep['status'],
               estimatedMinutes: step.estimatedMinutes,
             },
           });
@@ -164,6 +166,12 @@ export class LearningPathService {
         res.end();
       }
     } catch (error) {
+      // Mark the goal as failed so the frontend stops retrying on refresh.
+      // Best-effort: ignore DB errors here to avoid masking the original error.
+      void this.prisma.goal
+        .update({ where: { id: goalId }, data: { status: 'failed' } })
+        .catch(() => undefined);
+
       if (!closed) {
         const message = error instanceof Error ? error.message : 'AI 服务暂时不可用。';
         writeSse(res, { type: 'error', message });
@@ -179,6 +187,8 @@ export class LearningPathService {
     this.pendingInitialChatPrewarm.push(async () => {
       try {
         await this.generateInitialChatForStep(goalId, stepId);
+      } catch (error) {
+        console.error(`[prewarm] step ${stepId} failed:`, error);
       } finally {
         this.prewarmingStepIds.delete(stepId);
       }

@@ -5,7 +5,15 @@ import type {
   TeachingGenerationStatusItem,
 } from '@pathmind/shared';
 import { API_BASE_URL } from '../../shared/config';
+import { streamSseEvents } from '../../shared/sse-stream';
 import { parseSseEvent } from './sse';
+
+async function parseJsonResponse<T>(response: Response, fallbackMessage: string): Promise<T> {
+  if (!response.ok) {
+    throw new Error(fallbackMessage);
+  }
+  return response.json() as Promise<T>;
+}
 
 interface StreamChatCallbacks {
   onDelta(content: string): void;
@@ -26,82 +34,34 @@ export async function getChatSession(
   stepId: string,
 ): Promise<{ messages: ChatMessage[] }> {
   const response = await fetch(`${API_BASE_URL}/chat/session?goalId=${goalId}&stepId=${stepId}`);
-
-  if (!response.ok) {
-    throw new Error('AI 服务暂时不可用，请检查后端服务或数据库。');
-  }
-
-  return response.json() as Promise<{ messages: ChatMessage[] }>;
+  return parseJsonResponse(response, 'AI 服务暂时不可用，请检查后端服务或数据库。');
 }
 
 export async function getTeachingGenerationStatuses(
   goalId: string,
 ): Promise<{ steps: TeachingGenerationStatusItem[] }> {
   const response = await fetch(`${API_BASE_URL}/chat/teaching-status?goalId=${goalId}`);
-
-  if (!response.ok) {
-    throw new Error('AI 教学讲解状态暂时不可用。');
-  }
-
-  return response.json() as Promise<{ steps: TeachingGenerationStatusItem[] }>;
+  return parseJsonResponse(response, 'AI 教学讲解状态暂时不可用。');
 }
 
-export async function streamChatSession(
+export function streamChatSession(
   input: StreamChatSessionInput,
   callbacks: StreamChatCallbacks,
   signal?: AbortSignal,
-) {
-  try {
-    const response = await fetch(`${API_BASE_URL}/chat/session`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(input),
-      signal,
-    });
-
-    if (!response.ok || !response.body) {
-      throw new Error('AI 服务暂时不可用，请检查后端服务或 API Key。');
-    }
-
-    const reader = response.body.getReader();
-    const decoder = new TextDecoder();
-    let buffer = '';
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) {
-        break;
+): () => void {
+  return streamSseEvents(
+    { url: `${API_BASE_URL}/chat/session`, method: 'POST', body: input, signal },
+    (rawEvent) => {
+      const event = parseSseEvent(rawEvent);
+      if (!event) return;
+      if (event.type === 'delta') {
+        callbacks.onDelta(event.content);
+      } else if (event.type === 'done') {
+        callbacks.onDone();
+      } else {
+        callbacks.onError(new Error(event.message));
       }
-
-      buffer += decoder.decode(value, { stream: true });
-      const events = buffer.split(/\n\n/);
-      buffer = events.pop() ?? '';
-
-      for (const eventText of events) {
-        const event = parseSseEvent(eventText);
-        if (!event) {
-          continue;
-        }
-
-        if (event.type === 'delta') {
-          callbacks.onDelta(event.content);
-        } else if (event.type === 'done') {
-          callbacks.onDone();
-          return;
-        } else {
-          callbacks.onError(new Error(event.message));
-          return;
-        }
-      }
-    }
-
-    callbacks.onDone();
-  } catch (error) {
-    if (error instanceof DOMException && error.name === 'AbortError') {
-      return;
-    }
-    callbacks.onError(
-      error instanceof Error ? error : new Error('AI 服务暂时不可用，请检查后端服务或 API Key。'),
-    );
-  }
+    },
+    callbacks.onError,
+  );
 }

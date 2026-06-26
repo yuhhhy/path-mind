@@ -6,11 +6,13 @@ import type {
   LearningStep,
   Quiz,
   QuizAttemptAnswer,
+  SseEvent,
   StepSummary,
   StepVerification,
   Transfer,
 } from '@pathmind/shared';
 import { API_BASE_URL } from '../../shared/config';
+import { streamSseEvents } from '../../shared/sse-stream';
 import { extractSseData } from '../chat/sse';
 
 export interface CreateGoalInput {
@@ -110,10 +112,7 @@ interface StepStreamCallbacks {
   onError(error: Error): void;
 }
 
-type StepSseEvent =
-  | { type: 'step'; step: LearningStep }
-  | { type: 'done' }
-  | { type: 'error'; message: string };
+type StepSseEvent = Extract<SseEvent, { type: 'step' | 'done' | 'error' }>;
 
 function parseStepEvent(rawEvent: string): StepSseEvent | null {
   const data = extractSseData(rawEvent);
@@ -126,60 +125,21 @@ function parseStepEvent(rawEvent: string): StepSseEvent | null {
 }
 
 export function streamGoalSteps(goalId: string, callbacks: StepStreamCallbacks): () => void {
-  const controller = new AbortController();
-
-  void (async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/learning-path/${goalId}/stream`, {
-        signal: controller.signal,
-      });
-
-      if (!response.ok || !response.body) {
-        throw new Error('AI 服务暂时不可用，请检查后端服务或 API Key。');
+  return streamSseEvents(
+    { url: `${API_BASE_URL}/learning-path/${goalId}/stream` },
+    (rawEvent) => {
+      const event = parseStepEvent(rawEvent);
+      if (!event) return;
+      if (event.type === 'step') {
+        callbacks.onStep(event.step);
+      } else if (event.type === 'done') {
+        callbacks.onDone();
+      } else if (event.type === 'error') {
+        callbacks.onError(new Error(event.message));
       }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunk = decoder.decode(value, { stream: true });
-        buffer += chunk;
-        const events = buffer.split(/\n\n/);
-        buffer = events.pop() ?? '';
-
-        for (const eventText of events) {
-          const event = parseStepEvent(eventText);
-          if (!event) continue;
-          if (event.type === 'step') {
-            callbacks.onStep(event.step);
-          } else if (event.type === 'done') {
-            callbacks.onDone();
-            return;
-          } else if (event.type === 'error') {
-            callbacks.onError(new Error(event.message));
-            return;
-          }
-        }
-      }
-
-      callbacks.onDone();
-    } catch (error) {
-      if (error instanceof DOMException && error.name === 'AbortError') {
-        return;
-      }
-      callbacks.onError(
-        error instanceof Error ? error : new Error('AI 服务暂时不可用，请检查后端服务或 API Key。'),
-      );
-    }
-  })();
-
-  return () => {
-    controller.abort();
-  };
+    },
+    callbacks.onError,
+  );
 }
 
 export async function completeStep(

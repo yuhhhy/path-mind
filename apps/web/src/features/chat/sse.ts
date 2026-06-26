@@ -1,7 +1,6 @@
-export type ParsedSseEvent =
-  | { type: 'delta'; content: string }
-  | { type: 'done' }
-  | { type: 'error'; message: string };
+import type { SseEvent } from '@pathmind/shared';
+
+export type ParsedSseEvent = Extract<SseEvent, { type: 'delta' | 'done' | 'error' }>;
 
 export function extractSseData(rawEvent: string): string | null {
   const data = rawEvent
@@ -18,9 +17,9 @@ export function parseSseEvent(rawEvent: string): ParsedSseEvent | null {
   const data = extractSseData(rawEvent);
   if (!data) return null;
 
-  const parsed = JSON.parse(data) as ParsedSseEvent;
+  const parsed = JSON.parse(data) as SseEvent;
   if (parsed.type === 'delta' || parsed.type === 'done' || parsed.type === 'error') {
-    return parsed;
+    return parsed as ParsedSseEvent;
   }
 
   return null;

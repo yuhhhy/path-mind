@@ -19,7 +19,7 @@ import {
   ApiQuery,
   ApiTags,
 } from '@nestjs/swagger';
-import { formatSseEvent } from '../common/sse/sse.utils.js';
+import { writeSse } from '../common/sse/sse.utils.js';
 import {
   ChatSessionInputDto,
   ChatSessionResponseDto,
@@ -30,11 +30,6 @@ import {
 import { ChatService } from './chat.service.js';
 import { chatSessionSchema } from './dto/chat-session.dto.js';
 import { appendMessageDelta } from './utils/message-buffer.js';
-
-function writeSse(res: ServerResponse, event: Parameters<typeof formatSseEvent>[0]) {
-  res.write(formatSseEvent(event));
-  (res as ServerResponse & { flush?: () => void }).flush?.();
-}
 
 @ApiTags('chat')
 @ApiExtraModels(SseDeltaEventDto, SseDoneEventDto, SseErrorEventDto)
