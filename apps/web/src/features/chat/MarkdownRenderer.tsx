@@ -40,20 +40,24 @@ const components: Components = {
   // Table needs overflow wrapper to prevent breaking the chat layout
   table({ children }) {
     return (
-      <div className="not-prose my-4 overflow-x-auto">
-        <table className="w-full border-collapse text-sm">{children}</table>
+      <div className="not-prose my-4 max-w-full overflow-x-auto rounded-lg border border-slate-200 [scrollbar-width:thin] [scrollbar-color:#cbd5e1_transparent] [&::-webkit-scrollbar]:h-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-slate-300">
+        <table className="w-max min-w-full table-auto border-collapse text-sm">{children}</table>
       </div>
     );
   },
   th({ children }) {
     return (
-      <th className="border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs font-semibold text-slate-600">
+      <th className="min-w-36 border border-slate-200 bg-slate-50 px-3 py-2 text-left text-xs leading-5 font-semibold text-slate-600 align-middle whitespace-normal">
         {children}
       </th>
     );
   },
   td({ children }) {
-    return <td className="border border-slate-200 px-3 py-2 text-slate-700">{children}</td>;
+    return (
+      <td className="min-w-36 border border-slate-200 px-3 py-2 leading-6 text-slate-700 align-middle whitespace-normal break-words [&_code]:break-all [&_code]:whitespace-normal">
+        {children}
+      </td>
+    );
   },
 
   // Blockquote as a tip/callout block with colored left border and tinted background
