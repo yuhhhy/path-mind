@@ -101,24 +101,23 @@ export class VerificationService {
       throw new BadRequestException('请完成所有题目后再提交。');
     }
 
-    const results: QuizAttemptAnswer[] = [];
+    const results = await Promise.all(
+      quiz.questions.map(async (question): Promise<QuizAttemptAnswer> => {
+        const answer = answerByQuestionId.get(question.id)!;
 
-    for (const question of quiz.questions) {
-      const answer = answerByQuestionId.get(question.id);
-      if (!answer) continue;
+        if (question.type === 'single_choice') {
+          const isCorrect =
+            normalizeAnswer(answer.answer) === normalizeAnswer(question.correctAnswer);
+          return {
+            questionId: question.id,
+            answer: answer.answer,
+            isCorrect,
+            feedback: isCorrect
+              ? '回答正确。'
+              : `还差一点。参考答案：${question.correctAnswer}。${question.explanation}`,
+          };
+        }
 
-      if (question.type === 'single_choice') {
-        const isCorrect =
-          normalizeAnswer(answer.answer) === normalizeAnswer(question.correctAnswer);
-        results.push({
-          questionId: question.id,
-          answer: answer.answer,
-          isCorrect,
-          feedback: isCorrect
-            ? '回答正确。'
-            : `还差一点。参考答案：${question.correctAnswer}。${question.explanation}`,
-        });
-      } else {
         const grading = await this.aiService.gradeOpenAnswer(
           buildGradeOpenAnswerPrompt({
             questionType: question.type === 'explain_back' ? 'explain_back' : 'scenario_question',
@@ -128,14 +127,14 @@ export class VerificationService {
             userAnswer: answer.answer,
           }),
         );
-        results.push({
+        return {
           questionId: question.id,
           answer: answer.answer,
           isCorrect: grading.isCorrect,
           feedback: grading.feedback,
-        });
-      }
-    }
+        };
+      }),
+    );
 
     const correctCount = results.filter((result) => result.isCorrect).length;
     const score = Math.round((correctCount / quiz.questions.length) * 100);

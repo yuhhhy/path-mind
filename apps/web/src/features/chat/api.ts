@@ -4,9 +4,8 @@ import type {
   TeachingGenerationStatus,
   TeachingGenerationStatusItem,
 } from '@pathmind/shared';
+import { API_BASE_URL } from '../../shared/config';
 import { parseSseEvent } from './sse';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
 
 interface StreamChatCallbacks {
   onDelta(content: string): void;

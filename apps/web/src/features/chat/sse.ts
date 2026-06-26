@@ -3,7 +3,7 @@ export type ParsedSseEvent =
   | { type: 'done' }
   | { type: 'error'; message: string };
 
-export function parseSseEvent(rawEvent: string): ParsedSseEvent | null {
+export function extractSseData(rawEvent: string): string | null {
   const data = rawEvent
     .split('\n')
     .filter((line) => line.startsWith('data:'))
@@ -11,9 +11,12 @@ export function parseSseEvent(rawEvent: string): ParsedSseEvent | null {
     .join('\n')
     .trim();
 
-  if (!data) {
-    return null;
-  }
+  return data || null;
+}
+
+export function parseSseEvent(rawEvent: string): ParsedSseEvent | null {
+  const data = extractSseData(rawEvent);
+  if (!data) return null;
 
   const parsed = JSON.parse(data) as ParsedSseEvent;
   if (parsed.type === 'delta' || parsed.type === 'done' || parsed.type === 'error') {

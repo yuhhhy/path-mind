@@ -5,12 +5,11 @@ import { AiService } from '../ai/ai.service.js';
 import { buildChatCoachPrompt } from '../chat/prompts/chat-coach.prompt.js';
 import type { SseEvent } from '../common/sse/sse.types.js';
 import { formatSseEvent } from '../common/sse/sse.utils.js';
+import { DEV_USER_ID } from '../config/constants.js';
 import { toSharedGoal } from '../goals/utils/goal.mapper.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type { GenerateLearningPathDto } from './dto/generate-learning-path.dto.js';
 import { buildLearningPathPrompt } from './prompts/learning-path.prompt.js';
-
-const DEV_USER_ID = 'local-dev-user';
 const INITIAL_CHAT_PREWARM_CONCURRENCY = 2;
 
 function writeSse(res: ServerResponse, event: SseEvent) {
@@ -234,6 +233,7 @@ export class LearningPathService {
     const userMessage = `请开始当前 Step「${step.title}」的教学。`;
     const systemPrompt = buildChatCoachPrompt({ goal: goal as Goal, step, messages: [] });
     let assistantContent = '';
+    let lastFlushAt = 0;
     const assistantDraft = await this.prisma.chatMessage.create({
       data: {
         sessionId: session.id,
@@ -247,18 +247,14 @@ export class LearningPathService {
       { role: 'user', content: userMessage },
     ])) {
       assistantContent += chunk;
-      await this.prisma.chatMessage.update({
-        where: { id: assistantDraft.id },
-        data: { content: assistantContent, status: 'streaming' },
-      });
-    }
-
-    if (!assistantContent.trim()) {
-      await this.prisma.chatMessage.update({
-        where: { id: assistantDraft.id },
-        data: { content: '', status: 'complete' },
-      });
-      return;
+      const now = Date.now();
+      if (now - lastFlushAt >= 500) {
+        lastFlushAt = now;
+        await this.prisma.chatMessage.update({
+          where: { id: assistantDraft.id },
+          data: { content: assistantContent, status: 'streaming' },
+        });
+      }
     }
 
     await this.prisma.chatMessage.update({

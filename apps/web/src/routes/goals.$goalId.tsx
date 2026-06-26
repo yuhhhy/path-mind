@@ -199,6 +199,7 @@ function GoalDetailPage() {
 
         const statusByStepId = new Map(result.steps.map((step) => [step.stepId, step.status]));
         let hasActiveTeachingTask = false;
+        const currentTasks = useAIGenerationStore.getState().tasks;
 
         displayedSteps.forEach((step, index) => {
           const status = statusByStepId.get(step.id) ?? 'queued';
@@ -206,8 +207,11 @@ function GoalDetailPage() {
             hasActiveTeachingTask = true;
           }
 
+          const taskId = `step:${step.id}:teaching`;
+          if (currentTasks.find((t) => t.id === taskId)?.status === status) return;
+
           upsertTask({
-            id: `step:${step.id}:teaching`,
+            id: taskId,
             title: `生成 Step ${index + 1} 讲解`,
             status,
             scope: { goalId, stepId: step.id },

@@ -10,8 +10,8 @@ import type {
   StepVerification,
   Transfer,
 } from '@pathmind/shared';
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:3001/api';
+import { API_BASE_URL } from '../../shared/config';
+import { extractSseData } from '../chat/sse';
 
 export interface CreateGoalInput {
   title: string;
@@ -116,12 +116,7 @@ type StepSseEvent =
   | { type: 'error'; message: string };
 
 function parseStepEvent(rawEvent: string): StepSseEvent | null {
-  const data = rawEvent
-    .split('\n')
-    .filter((line) => line.startsWith('data:'))
-    .map((line) => line.slice(5).trimStart())
-    .join('\n')
-    .trim();
+  const data = extractSseData(rawEvent);
   if (!data) return null;
   try {
     return JSON.parse(data) as StepSseEvent;

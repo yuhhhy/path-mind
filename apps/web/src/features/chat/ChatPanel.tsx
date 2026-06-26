@@ -164,10 +164,6 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
     if (autoStartKeyRef.current === currentKey) return;
 
     const persistedMessages = chatQuery.data.messages;
-    const streamingAssistant = persistedMessages.find(
-      (message) =>
-        message.role === 'assistant' && message.status === 'streaming' && message.content.trim(),
-    );
     const hasCompleteAssistantReply = persistedMessages.some(
       (message) =>
         message.role === 'assistant' &&
@@ -178,9 +174,7 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
 
     const startTimer = window.setTimeout(() => {
       autoStartKeyRef.current = currentKey;
-      if (streamingAssistant) {
-        void runSession(persistedMessages);
-      } else if (persistedMessages.length > 0) {
+      if (persistedMessages.length > 0) {
         void runSession(persistedMessages);
       } else {
         void runSession([], { silentUserMessage: `请开始当前 Step「${step.title}」的教学。` });
