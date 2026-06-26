@@ -1,5 +1,5 @@
-import { Link } from '@tanstack/react-router';
 import { CheckCircle2, Circle, PlayCircle } from 'lucide-react';
+import { LinkButton } from '../../shared/ui/Button';
 import type { Goal, LearningStep } from './types';
 
 interface LearningPathProps {
@@ -51,17 +51,14 @@ export function LearningPath({ goal }: LearningPathProps) {
                   </div>
                   <div className="flex shrink-0 items-center gap-2.5">
                     <span className="text-xs text-gray-400">{step.estimatedMinutes} 分钟</span>
-                    <Link
-                      className={
-                        isLearning
-                          ? 'inline-flex h-7 items-center justify-center rounded-md bg-blue-600 px-3 text-xs font-medium text-white transition-colors hover:bg-blue-700'
-                          : 'inline-flex h-7 items-center justify-center rounded-md border border-gray-300 bg-white px-3 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50'
-                      }
+                    <LinkButton
+                      className="justify-center px-3"
+                      tone={isLearning ? 'primary' : 'secondary'}
                       to="/goals/$goalId/session/$stepId"
                       params={{ goalId: goal.id, stepId: step.id }}
                     >
                       {buttonLabel}
-                    </Link>
+                    </LinkButton>
                   </div>
                 </div>
               </div>

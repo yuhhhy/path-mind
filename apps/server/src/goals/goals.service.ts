@@ -68,7 +68,11 @@ export class GoalsService {
     return toSharedGoal(goal);
   }
 
-  async completeStep(goalId: string, stepId: string): Promise<Goal> {
+  async completeStep(
+    goalId: string,
+    stepId: string,
+    options: { force?: boolean } = {},
+  ): Promise<Goal> {
     const goal = await this.prisma.goal.findFirst({
       where: { id: goalId, devUserId: DEV_USER_ID },
       include: { steps: { orderBy: { order: 'asc' } } },
@@ -83,7 +87,7 @@ export class GoalsService {
     }
 
     const canCompleteStep = await this.verificationService.canCompleteStep(stepId);
-    if (!canCompleteStep) {
+    if (!canCompleteStep && !options.force) {
       throw new BadRequestException('请先完成复述、测验和总结，再完成本节 Step。');
     }
 

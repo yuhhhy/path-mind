@@ -234,23 +234,36 @@ export class LearningPathService {
     const userMessage = `请开始当前 Step「${step.title}」的教学。`;
     const systemPrompt = buildChatCoachPrompt({ goal: goal as Goal, step, messages: [] });
     let assistantContent = '';
+    const assistantDraft = await this.prisma.chatMessage.create({
+      data: {
+        sessionId: session.id,
+        role: 'assistant',
+        content: '',
+        status: 'streaming',
+      },
+    });
 
     for await (const chunk of this.aiService.streamCoachReply(systemPrompt, [
       { role: 'user', content: userMessage },
     ])) {
       assistantContent += chunk;
+      await this.prisma.chatMessage.update({
+        where: { id: assistantDraft.id },
+        data: { content: assistantContent, status: 'streaming' },
+      });
     }
 
-    if (!assistantContent.trim()) return;
+    if (!assistantContent.trim()) {
+      await this.prisma.chatMessage.update({
+        where: { id: assistantDraft.id },
+        data: { content: '', status: 'complete' },
+      });
+      return;
+    }
 
-    const assistantMessageAfterGeneration = await this.prisma.chatMessage.findFirst({
-      where: { sessionId: session.id, role: 'assistant' },
-      select: { id: true },
-    });
-    if (assistantMessageAfterGeneration) return;
-
-    await this.prisma.chatMessage.create({
-      data: { sessionId: session.id, role: 'assistant', content: assistantContent },
+    await this.prisma.chatMessage.update({
+      where: { id: assistantDraft.id },
+      data: { content: assistantContent, status: 'complete' },
     });
   }
 }

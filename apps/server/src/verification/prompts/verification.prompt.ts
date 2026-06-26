@@ -77,9 +77,15 @@ ${input.stepDescription}
 ${compactContent(input.teachingContent)}
 
 请生成以下三种题型，合计 3-4 道题：
-1. explain_back（必须有且只有 1 道）：让用户用自己的话讲一遍本节核心内容，不能只是简单复述，要考察整体理解。options 留空数组。
+1. explain_back（必须有且只有 1 道）：让用户用自己的话讲一遍本节核心内容，不能只是简单复述，要考察整体理解。options 必须是空数组，correctAnswer 必须写 3-5 条参考答案要点，不能留空。
 2. single_choice（1-2 道）：概念判断或选择题，验证关键概念的准确理解。每题提供 3-4 个 options，correctAnswer 必须和其中一个 option 完全一致。
-3. scenario_question（必须有且只有 1 道）：面试题或场景题，考察知识在实际情境中的运用。options 留空数组。
+3. scenario_question（必须有且只有 1 道）：面试题或场景题，考察知识在实际情境中的运用。options 必须是空数组，correctAnswer 必须写出参考分析要点，不能留空。
+
+字段硬性要求：
+- 每一道题的 question、correctAnswer、explanation 都必须是非空字符串。
+- explain_back 和 scenario_question 虽然是开放题，也必须提供 correctAnswer，作为后续 AI 批改时使用的参考答案要点。
+- single_choice 的 correctAnswer 必须与 options 中某一个选项逐字完全一致。
+- options 字段必须始终存在；开放题用 []，选择题用 3-4 个非空字符串。
 
 题目顺序：explain_back → single_choice → scenario_question。
 

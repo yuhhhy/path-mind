@@ -55,6 +55,17 @@ export class ChatController {
     return this.chatService.getSession(goalId, stepId);
   }
 
+  @ApiOperation({ summary: 'Get AI teaching generation status for every step in a goal' })
+  @ApiQuery({ name: 'goalId', example: 'cmqtdnd6p0000xcobs2uqh769' })
+  @Get('teaching-status')
+  getTeachingStatus(@Query('goalId') goalId: string) {
+    if (!goalId) {
+      throw new BadRequestException('goalId 是必填参数。');
+    }
+
+    return this.chatService.getTeachingStatuses(goalId);
+  }
+
   @ApiOperation({
     summary: 'Stream an AI teaching reply over SSE and persist the completed messages',
     description:
@@ -86,7 +97,11 @@ export class ChatController {
     const prepared = await this.chatService.prepareSession(input);
     const abortController = new AbortController();
     let closed = false;
-    let assistantContent = '';
+    let assistantContent = prepared.initialAssistantContent;
+    const assistantDraft =
+      prepared.assistantMessageId.length > 0
+        ? { id: prepared.assistantMessageId, content: prepared.initialAssistantContent }
+        : await this.chatService.createAssistantDraft(prepared.sessionId);
 
     req.on('close', () => {
       closed = true;
@@ -109,11 +124,12 @@ export class ChatController {
           return;
         }
         assistantContent = appendMessageDelta(assistantContent, content);
+        await this.chatService.updateAssistantDraft(assistantDraft.id, assistantContent);
         writeSse(res, { type: 'delta', content });
       }
 
       if (!closed) {
-        await this.chatService.saveAssistantMessage(prepared.sessionId, assistantContent);
+        await this.chatService.completeAssistantMessage(assistantDraft.id, assistantContent);
         writeSse(res, { type: 'done' });
         res.end();
       }

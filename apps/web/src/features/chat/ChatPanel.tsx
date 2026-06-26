@@ -1,6 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FormEvent } from 'react';
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Button } from '../../shared/ui/Button';
+import { useAIGenerationStore } from '../ai-generation/aiGenerationStore';
 import type { ChatMessage, Goal, LearningStep } from '../goal/types';
 import { streamChatSession } from './api';
 import { chatSessionQueryOptions } from './queries';
@@ -27,6 +29,9 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
   const [error, setError] = useState('');
   const abortRef = useRef<AbortController | null>(null);
   const autoStartKeyRef = useRef('');
+  const upsertTask = useAIGenerationStore((state) => state.upsertTask);
+  const setTaskStatus = useAIGenerationStore((state) => state.setTaskStatus);
+  const setPanelOpen = useAIGenerationStore((state) => state.setPanelOpen);
 
   const chatQuery = useQuery(chatOptions);
 
@@ -51,11 +56,25 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
       const lastMessage = next.at(-1);
 
       if (lastMessage?.role === 'assistant') {
-        next[next.length - 1] = { ...lastMessage, content: lastMessage.content + content };
+        next[next.length - 1] = {
+          ...lastMessage,
+          content: lastMessage.content + content,
+          status: 'streaming',
+        };
         return next;
       }
 
-      return [...next, { role: 'assistant', content }];
+      return [...next, { role: 'assistant', content, status: 'streaming' }];
+    });
+  }, []);
+
+  const completeLastAssistantMessage = useCallback(() => {
+    setMessages((current) => {
+      const next = [...current];
+      const lastMessage = next.at(-1);
+      if (lastMessage?.role !== 'assistant') return current;
+      next[next.length - 1] = { ...lastMessage, status: 'complete' };
+      return next;
     });
   }, []);
 
@@ -70,11 +89,30 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
       const visibleMessages = options.userMessage
         ? [...history, { role: 'user' as const, content: options.userMessage }]
         : history;
+      const streamingAssistant = visibleMessages.findLast(
+        (message) => message.role === 'assistant' && message.status === 'streaming' && message.id,
+      );
+      const taskId = `step:${step.id}:teaching`;
+      const taskTitle = options.userMessage ? '生成 AI 追问回复' : '生成 AI 教学讲解';
+      const shouldReuseStreamingAssistant =
+        visibleMessages.at(-1)?.role === 'assistant' &&
+        visibleMessages.at(-1)?.status === 'streaming';
 
       abortRef.current = abortController;
       setError('');
       setIsStreaming(true);
-      setMessages([...visibleMessages, { role: 'assistant', content: '' }]);
+      setMessages(
+        shouldReuseStreamingAssistant
+          ? visibleMessages
+          : [...visibleMessages, { role: 'assistant', content: '', status: 'streaming' }],
+      );
+      upsertTask({
+        id: taskId,
+        title: taskTitle,
+        status: 'running',
+        scope: { goalId: goal.id, stepId: step.id },
+      });
+      setPanelOpen(true);
 
       await streamChatSession(
         {
@@ -83,6 +121,7 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
           messages: history,
           userMessage: options.userMessage,
           silentUserMessage: options.silentUserMessage,
+          continueAssistantMessageId: streamingAssistant?.id,
         },
         {
           onDelta(content) {
@@ -90,17 +129,32 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
           },
           onDone() {
             setIsStreaming(false);
+            completeLastAssistantMessage();
+            setTaskStatus(taskId, 'done', { title: `${taskTitle}完成` });
             void queryClient.invalidateQueries({ queryKey: chatOptions.queryKey });
           },
           onError(streamError) {
             setError(streamError.message || 'AI 服务暂时不可用，请检查后端服务或 API Key。');
             setIsStreaming(false);
+            setTaskStatus(taskId, 'failed', {
+              error: streamError.message || 'AI 教学生成失败',
+            });
           },
         },
         abortController.signal,
       );
     },
-    [appendAssistantDelta, chatOptions.queryKey, goal, queryClient, step],
+    [
+      appendAssistantDelta,
+      chatOptions.queryKey,
+      completeLastAssistantMessage,
+      goal,
+      queryClient,
+      setPanelOpen,
+      setTaskStatus,
+      step,
+      upsertTask,
+    ],
   );
 
   useEffect(() => {
@@ -110,14 +164,23 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
     if (autoStartKeyRef.current === currentKey) return;
 
     const persistedMessages = chatQuery.data.messages;
-    const hasAssistantReply = persistedMessages.some(
-      (message) => message.role === 'assistant' && message.content.trim().length > 0,
+    const streamingAssistant = persistedMessages.find(
+      (message) =>
+        message.role === 'assistant' && message.status === 'streaming' && message.content.trim(),
     );
-    if (hasAssistantReply) return;
+    const hasCompleteAssistantReply = persistedMessages.some(
+      (message) =>
+        message.role === 'assistant' &&
+        message.status !== 'streaming' &&
+        message.content.trim().length > 0,
+    );
+    if (hasCompleteAssistantReply) return;
 
     const startTimer = window.setTimeout(() => {
       autoStartKeyRef.current = currentKey;
-      if (persistedMessages.length > 0) {
+      if (streamingAssistant) {
+        void runSession(persistedMessages);
+      } else if (persistedMessages.length > 0) {
         void runSession(persistedMessages);
       } else {
         void runSession([], { silentUserMessage: `请开始当前 Step「${step.title}」的教学。` });
@@ -167,14 +230,14 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
             <p className="mt-1 text-sm leading-relaxed text-gray-500">
               AI 会围绕当前 Goal 和 Step 分段讲解，并在合适的时候给你一个小问题。
             </p>
-            <button
-              className="mt-4 inline-flex h-9 items-center justify-center rounded-md bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+            <Button
+              className="mt-4 justify-center px-3.5"
               disabled={isStreaming}
               onClick={handleStart}
-              type="button"
+              size="md"
             >
               {isStreaming ? '生成中...' : '开始 AI 教学'}
-            </button>
+            </Button>
           </div>
         ) : (
           <div className="space-y-3">
@@ -221,13 +284,14 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
               placeholder="追问一句，比如：这里为什么需要 DNS？"
               value={draft}
             />
-            <button
-              className="inline-flex h-9 items-center justify-center rounded-md bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+            <Button
+              className="justify-center"
               disabled={isStreaming || draft.trim().length === 0}
+              size="md"
               type="submit"
             >
               {isStreaming ? '回复中' : '发送'}
-            </button>
+            </Button>
           </form>
         )}
       </div>

@@ -1,6 +1,7 @@
 import { Link, useRouterState } from '@tanstack/react-router';
 import { ArrowLeft, BookOpen, ChevronRight, LayoutDashboard, PanelLeft } from 'lucide-react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
+import { AiGenerationDock } from '../../features/ai-generation/AiGenerationDock';
 import { BreadcrumbContext, type BreadcrumbItem } from './BreadcrumbContext';
 
 interface AppLayoutProps {
@@ -147,10 +148,11 @@ export function AppLayout({ children }: AppLayoutProps) {
 
         <main className="flex-1 overflow-y-auto bg-white">
           <BreadcrumbContext value={ctxValue}>
-            <div className="mx-auto max-w-5xl px-8 py-8">{children}</div>
+            <div className="mx-auto max-w-6xl px-8 py-8">{children}</div>
           </BreadcrumbContext>
         </main>
       </div>
+      <AiGenerationDock />
     </div>
   );
 }

@@ -2,10 +2,12 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
 import { ArrowUpRight, Clock, FolderOpen, Plus, Target } from 'lucide-react';
 import { useState } from 'react';
+import { useAIGenerationStore } from '../features/ai-generation/aiGenerationStore';
 import { initGoal } from '../features/goal/api';
 import { mockGoals } from '../features/goal/mockGoals';
 import { goalsQueryOptions } from '../features/goal/queries';
 import type { GenerateLearningPathInput } from '../features/goal/types';
+import { Button, LinkButton } from '../shared/ui/Button';
 
 export const Route = createFileRoute('/')({
   component: DashboardPage,
@@ -32,6 +34,9 @@ function DashboardPage() {
   const goalsOptions = goalsQueryOptions();
   const goalsQuery = useQuery(goalsOptions);
   const goals = goalsQuery.data ?? (goalsQuery.isError ? mockGoals : []);
+  const upsertTask = useAIGenerationStore((state) => state.upsertTask);
+  const setTaskStatus = useAIGenerationStore((state) => state.setTaskStatus);
+  const setPanelOpen = useAIGenerationStore((state) => state.setPanelOpen);
 
   const [goalTitle, setGoalTitle] = useState(DEFAULT_GOAL_TITLE);
 
@@ -48,9 +53,33 @@ function DashboardPage() {
       };
       return initGoal(input);
     },
+    onMutate(title) {
+      const trimmedTitle = title.trim() || DEFAULT_GOAL_TITLE;
+      upsertTask({
+        id: 'goal:create',
+        title: '创建学习目标',
+        description: trimmedTitle,
+        status: 'running',
+      });
+      upsertTask({
+        id: 'goal:path:queued',
+        title: '生成学习路径',
+        description: '等待目标创建完成后开始规划 Step',
+        status: 'queued',
+      });
+      setPanelOpen(true);
+    },
     onSuccess({ goalId }) {
+      setTaskStatus('goal:create', 'done', { description: '学习目标草稿已创建' });
+      setTaskStatus('goal:path:queued', 'running', { description: '正在进入路径生成流程' });
       void queryClient.invalidateQueries({ queryKey: goalsOptions.queryKey });
       void navigate({ to: '/goals/$goalId', params: { goalId } });
+    },
+    onError(error) {
+      setTaskStatus('goal:create', 'failed', {
+        error: error instanceof Error ? error.message : '创建学习目标失败',
+      });
+      setTaskStatus('goal:path:queued', 'failed', { error: '学习目标创建失败，路径生成未开始' });
     },
   });
 
@@ -75,14 +104,14 @@ function DashboardPage() {
               placeholder="输入你的学习目标…"
               value={goalTitle}
             />
-            <button
-              className="inline-flex h-9 shrink-0 items-center justify-center gap-2 rounded-md bg-blue-600 px-3.5 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-slate-200"
+            <Button
+              className="shrink-0 justify-center"
               disabled={createGoalMutation.isPending || goalTitle.trim().length === 0}
               onClick={() => createGoalMutation.mutate(goalTitle)}
-              type="button"
+              size="md"
             >
               {createGoalMutation.isPending ? '生成中...' : '生成'}
-            </button>
+            </Button>
           </div>
           {createGoalMutation.isError && (
             <p className="text-xs text-red-600">AI 服务暂时不可用，请检查后端服务或 API Key。</p>
@@ -117,12 +146,7 @@ function DashboardPage() {
               <p className="mt-3 text-sm font-medium text-slate-700">还没有学习目标</p>
               <p className="mt-1 text-xs text-slate-400">新建一个目标，开始你的学习之旅。</p>
               <div className="mt-5 flex items-center justify-center">
-                <Link
-                  className="inline-flex h-8 items-center gap-1.5 rounded-md bg-blue-600 px-3.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
-                  to="/goals"
-                >
-                  + 新建目标
-                </Link>
+                <LinkButton to="/goals">+ 新建目标</LinkButton>
               </div>
             </div>
           ) : (
@@ -181,14 +205,13 @@ function DashboardPage() {
                         </span>
                       </td>
                       <td className="px-4 py-3.5 text-right">
-                        <Link
-                          className="inline-flex h-7 items-center gap-1 rounded-md bg-blue-600 px-2.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+                        <LinkButton
+                          icon={<ArrowUpRight size={12} />}
                           params={{ goalId: goal.id }}
                           to="/goals/$goalId"
                         >
                           继续学习
-                          <ArrowUpRight size={12} />
-                        </Link>
+                        </LinkButton>
                       </td>
                     </tr>
                   );
@@ -218,13 +241,7 @@ function DashboardPage() {
               上传 PDF、笔记等资料，AI 将基于内容为你出题和解析。
             </p>
             <div className="mt-5 flex items-center justify-center">
-              <button
-                className="inline-flex h-7 items-center gap-1 rounded-md bg-blue-600 px-2.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
-                type="button"
-              >
-                <Plus size={12} />
-                <span className="text-xs">上传文档</span>
-              </button>
+              <Button icon={<Plus size={12} />}>上传文档</Button>
             </div>
           </div>
         </div>

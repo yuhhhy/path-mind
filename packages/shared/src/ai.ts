@@ -23,10 +23,13 @@ export interface GenerateLearningPathOutput {
 }
 
 export type ChatRole = 'user' | 'assistant';
+export type ChatMessageStatus = 'streaming' | 'complete';
 
 export interface ChatMessage {
+  id?: string;
   role: ChatRole;
   content: string;
+  status?: ChatMessageStatus;
 }
 
 export interface ChatSessionInput {

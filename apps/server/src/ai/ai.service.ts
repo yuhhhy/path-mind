@@ -405,29 +405,55 @@ export class AiService {
   ): Promise<T> {
     this.ensureApiKey();
 
-    const completion = await this.openai.chat.completions.create({
-      model: this.model,
-      temperature: 0.3,
-      messages: [
-        {
-          role: 'system',
-          content: 'You generate strict JSON only. Do not include Markdown fences or prose.',
-        },
-        { role: 'user', content: prompt },
-      ],
-    });
+    const systemMessage: ChatCompletionMessageParam = {
+      role: 'system',
+      content: 'You generate strict JSON only. Do not include Markdown fences or prose.',
+    };
+    const messages: ChatCompletionMessageParam[] = [
+      systemMessage,
+      { role: 'user', content: prompt },
+    ];
+    let lastContent = '';
+    let lastParseError = '';
 
-    const content = completion.choices[0]?.message.content;
-    if (!content) {
-      throw new BadGatewayException(`LLM 没有返回可解析的${label}内容。`);
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const completion = await this.openai.chat.completions.create({
+        model: this.model,
+        temperature: attempt === 0 ? 0.3 : 0,
+        messages,
+      });
+
+      const content = completion.choices[0]?.message.content;
+      if (!content) {
+        throw new BadGatewayException(`LLM 没有返回可解析的${label}内容。`);
+      }
+
+      lastContent = content;
+      try {
+        return schema.parse(JSON.parse(stripJsonFence(content)));
+      } catch (error) {
+        lastParseError = error instanceof Error ? error.message : 'Unknown parse error';
+        messages.push(
+          { role: 'assistant', content },
+          {
+            role: 'user',
+            content: [
+              `上一次返回的${label} JSON 没有通过校验。`,
+              `校验错误：${lastParseError}`,
+              '请只返回修正后的完整 JSON，不要 Markdown，不要解释。',
+              '所有必填字符串字段必须是非空字符串；数组内不能包含空字符串。',
+            ].join('\n'),
+          },
+        );
+      }
     }
 
     try {
-      return schema.parse(JSON.parse(stripJsonFence(content)));
-    } catch (error) {
+      return schema.parse(JSON.parse(stripJsonFence(lastContent)));
+    } catch {
       throw new BadGatewayException({
         message: `LLM 返回了不合法的${label} JSON。`,
-        detail: error instanceof Error ? error.message : 'Unknown parse error',
+        detail: lastParseError,
       });
     }
   }

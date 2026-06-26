@@ -1,5 +1,5 @@
-import { Link } from '@tanstack/react-router';
 import { Clock3 } from 'lucide-react';
+import { LinkButton } from '../../shared/ui/Button';
 import type { Goal } from './types';
 
 interface GoalCardProps {
@@ -30,13 +30,13 @@ export function GoalCard({ goal }: GoalCardProps) {
               {goal.description}
             </p>
           </div>
-          <Link
-            className="inline-flex h-8 shrink-0 items-center justify-center rounded-md bg-blue-600 px-3.5 text-xs font-medium text-white transition-colors hover:bg-blue-700"
+          <LinkButton
+            className="shrink-0 justify-center px-3.5"
             to="/goals/$goalId"
             params={{ goalId: goal.id }}
           >
             查看路径
-          </Link>
+          </LinkButton>
         </div>
 
         <div className="flex items-center gap-4 text-xs text-gray-400">

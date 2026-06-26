@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "build": "nest build",
-    "dev": "nest start --watch",
+    "dev": "lsof -ti :3001 | xargs kill -9 2>/dev/null; nest start --watch",
     "prisma:generate": "prisma generate --schema prisma/schema.prisma",
     "prisma:migrate": "prisma migrate dev --schema prisma/schema.prisma",
     "test": "vp test",

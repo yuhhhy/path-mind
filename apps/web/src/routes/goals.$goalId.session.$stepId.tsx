@@ -1,8 +1,10 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
-import { CheckCircle2, FileText, GitBranch, ListChecks, Sparkles } from 'lucide-react';
+import { Brain, CheckCircle2, FileText, GitBranch, ListChecks } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { Suspense, lazy, useEffect, useState } from 'react';
+import { runQueuedAIGenerationTask } from '../features/ai-generation/aiGenerationQueue';
+import { useAIGenerationStore } from '../features/ai-generation/aiGenerationStore';
 import { ChatPanel } from '../features/chat/ChatPanel';
 import {
   completeStep,
@@ -19,6 +21,7 @@ import {
   stepVerificationQueryOptions,
 } from '../features/goal/queries';
 import { useBreadcrumb } from '../shared/layout/BreadcrumbContext';
+import { Button } from '../shared/ui/Button';
 
 const MarkdownRenderer = lazy(() =>
   import('../features/chat/MarkdownRenderer').then((m) => ({ default: m.MarkdownRenderer })),
@@ -33,13 +36,17 @@ type VerificationStage = 'learning' | 'quiz' | 'transfer' | 'summary';
 const stages: Array<{
   id: VerificationStage;
   label: string;
-  icon: typeof Sparkles;
+  icon: typeof Brain;
 }> = [
-  { id: 'learning', label: '学习', icon: Sparkles },
+  { id: 'learning', label: '学习', icon: Brain },
   { id: 'quiz', label: '测验', icon: ListChecks },
   { id: 'transfer', label: '迁移', icon: GitBranch },
   { id: 'summary', label: '总结', icon: FileText },
 ];
+
+function getErrorMessage(error: unknown) {
+  return error instanceof Error ? error.message : 'AI 生成失败，请稍后重试。';
+}
 
 function LearningSessionPage() {
   const navigate = useNavigate();
@@ -56,9 +63,13 @@ function LearningSessionPage() {
   const [activeStage, setActiveStage] = useState<VerificationStage>('learning');
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
   const [transferDraft, setTransferDraft] = useState('');
+  const step = goal?.steps.find((item) => item.id === stepId);
+  const upsertTask = useAIGenerationStore((state) => state.upsertTask);
+  const setTaskStatus = useAIGenerationStore((state) => state.setTaskStatus);
+  const setPanelOpen = useAIGenerationStore((state) => state.setPanelOpen);
 
   const completeStepMutation = useMutation({
-    mutationFn: () => completeStep(goalId, stepId),
+    mutationFn: (options: { force?: boolean } = {}) => completeStep(goalId, stepId, options),
     onSuccess(updatedGoal) {
       queryClient.setQueryData(goalOptions.queryKey, updatedGoal);
       void queryClient.invalidateQueries({ queryKey: goalsOptions.queryKey });
@@ -69,55 +80,142 @@ function LearningSessionPage() {
   const refreshVerification = () =>
     queryClient.invalidateQueries({ queryKey: verificationOptions.queryKey });
 
+  const generateQuizTaskId = `step:${stepId}:quiz`;
+  const submitQuizTaskId = `step:${stepId}:quiz-review`;
+  const generateTransferTaskId = `step:${stepId}:transfer`;
+  const submitTransferTaskId = `step:${stepId}:transfer-review`;
+  const generateSummaryTaskId = `step:${stepId}:summary`;
+
   const generateQuizMutation = useMutation({
-    mutationFn: () => generateQuiz({ goalId, stepId }),
+    mutationFn: () =>
+      runQueuedAIGenerationTask(generateQuizTaskId, () => generateQuiz({ goalId, stepId })),
+    onMutate() {
+      upsertTask({
+        id: generateQuizTaskId,
+        title: '生成综合测验',
+        description: step?.title ?? '当前学习 Step',
+        status: 'queued',
+        scope: { goalId, stepId },
+      });
+      setPanelOpen(true);
+    },
     onSuccess(quiz) {
+      setTaskStatus(generateQuizTaskId, 'done', {
+        description: `已生成 ${quiz.questions.length} 道题`,
+      });
       setQuizAnswers(Object.fromEntries(quiz.questions.map((question) => [question.id, ''])));
       void refreshVerification();
+    },
+    onError(error) {
+      setTaskStatus(generateQuizTaskId, 'failed', { error: getErrorMessage(error) });
     },
   });
 
   const submitQuizMutation = useMutation({
-    mutationFn: () => {
-      if (!verification?.quiz) {
-        throw new Error('请先生成测验。');
-      }
-      return submitQuizAttempt({
-        quizId: verification.quiz.id,
-        answers: verification.quiz.questions.map((question) => ({
-          questionId: question.id,
-          answer: quizAnswers[question.id]?.trim() ?? '',
-        })),
+    mutationFn: () =>
+      runQueuedAIGenerationTask(submitQuizTaskId, () => {
+        if (!verification?.quiz) {
+          throw new Error('请先生成测验。');
+        }
+        return submitQuizAttempt({
+          quizId: verification.quiz.id,
+          answers: verification.quiz.questions.map((question) => ({
+            questionId: question.id,
+            answer: quizAnswers[question.id]?.trim() ?? '',
+          })),
+        });
+      }),
+    onMutate() {
+      upsertTask({
+        id: submitQuizTaskId,
+        title: '批改综合测验',
+        description: step?.title ?? '当前学习 Step',
+        status: 'queued',
+        scope: { goalId, stepId },
       });
+      setPanelOpen(true);
     },
     onSuccess() {
+      setTaskStatus(submitQuizTaskId, 'done', { description: '测验批改完成' });
       void refreshVerification();
+    },
+    onError(error) {
+      setTaskStatus(submitQuizTaskId, 'failed', { error: getErrorMessage(error) });
     },
   });
 
   const generateTransferMutation = useMutation({
-    mutationFn: () => generateTransfer({ goalId, stepId }),
+    mutationFn: () =>
+      runQueuedAIGenerationTask(generateTransferTaskId, () => generateTransfer({ goalId, stepId })),
+    onMutate() {
+      upsertTask({
+        id: generateTransferTaskId,
+        title: '生成迁移应用题',
+        description: step?.title ?? '当前学习 Step',
+        status: 'queued',
+        scope: { goalId, stepId },
+      });
+      setPanelOpen(true);
+    },
     onSuccess() {
+      setTaskStatus(generateTransferTaskId, 'done', { description: '迁移应用题已生成' });
       void refreshVerification();
+    },
+    onError(error) {
+      setTaskStatus(generateTransferTaskId, 'failed', { error: getErrorMessage(error) });
     },
   });
 
   const submitTransferMutation = useMutation({
-    mutationFn: () => submitTransfer({ goalId, stepId, content: transferDraft.trim() }),
+    mutationFn: () =>
+      runQueuedAIGenerationTask(submitTransferTaskId, () =>
+        submitTransfer({ goalId, stepId, content: transferDraft.trim() }),
+      ),
+    onMutate() {
+      upsertTask({
+        id: submitTransferTaskId,
+        title: '评价迁移应用',
+        description: step?.title ?? '当前学习 Step',
+        status: 'queued',
+        scope: { goalId, stepId },
+      });
+      setPanelOpen(true);
+    },
     onSuccess() {
+      setTaskStatus(submitTransferTaskId, 'done', { description: '迁移应用评价完成' });
       setTransferDraft('');
       void refreshVerification();
+    },
+    onError(error) {
+      setTaskStatus(submitTransferTaskId, 'failed', {
+        error: getErrorMessage(error),
+      });
     },
   });
 
   const generateSummaryMutation = useMutation({
-    mutationFn: () => generateStepSummary({ goalId, stepId }),
+    mutationFn: () =>
+      runQueuedAIGenerationTask(generateSummaryTaskId, () =>
+        generateStepSummary({ goalId, stepId }),
+      ),
+    onMutate() {
+      upsertTask({
+        id: generateSummaryTaskId,
+        title: '生成本节总结',
+        description: step?.title ?? '当前学习 Step',
+        status: 'queued',
+        scope: { goalId, stepId },
+      });
+      setPanelOpen(true);
+    },
     onSuccess() {
+      setTaskStatus(generateSummaryTaskId, 'done', { description: '本节总结已生成' });
       void refreshVerification();
     },
+    onError(error) {
+      setTaskStatus(generateSummaryTaskId, 'failed', { error: getErrorMessage(error) });
+    },
   });
-
-  const step = goal?.steps.find((item) => item.id === stepId);
 
   // Auto-generate quiz when entering quiz stage
   useEffect(() => {
@@ -166,10 +264,6 @@ function LearningSessionPage() {
     );
   }
 
-  const handleCompleteStep = () => {
-    completeStepMutation.mutate();
-  };
-
   const handleQuizSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (!verification?.quiz || submitQuizMutation.isPending) return;
@@ -187,31 +281,40 @@ function LearningSessionPage() {
   };
 
   const activeStageIndex = stages.findIndex((stage) => stage.id === activeStage);
-  const stageAvailability: Record<VerificationStage, boolean> = {
-    learning: true,
-    quiz: true,
-    transfer: Boolean(verification?.latestAttempt),
-    summary: Boolean(verification?.transfer?.userAnswer),
-  };
+  const unfinishedVerificationLabels = [
+    !verification?.latestAttempt ? '综合测验' : '',
+    !verification?.transfer?.userAnswer ? '迁移应用' : '',
+    !verification?.summary ? '学习总结' : '',
+  ].filter(Boolean);
   const completedSteps = goal.steps.filter((s) => s.status === 'done').length;
   const nextStep = goal.steps.find((s) => s.status === 'todo');
-  const assessmentLabel: Record<string, string> = {
-    quiz: '测验',
-    teach_back: '复述验证',
-    practice_task: '实践任务',
-    interview_question: '面试题验证',
+  const handleCompleteStep = () => {
+    if (step.status === 'done' || completeStepMutation.isPending) return;
+
+    if (unfinishedVerificationLabels.length > 0) {
+      const confirmed = window.confirm(
+        [
+          '本节还有环节没有完成。',
+          `未完成：${unfinishedVerificationLabels.join('、')}`,
+          '提前完成后，系统会把当前 Step 标记为已完成，并进入后续学习路径；未完成的测验、迁移应用或总结可以之后再回来补。',
+          '确定要提前完成本节吗？',
+        ].join('\n\n'),
+      );
+      if (!confirmed) return;
+    }
+
+    completeStepMutation.mutate({ force: unfinishedVerificationLabels.length > 0 });
   };
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_220px]">
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_260px]">
         <main className="space-y-4">
           <div className="rounded-lg border border-gray-200 bg-white p-2">
             <div className="grid grid-cols-4 gap-1">
               {stages.map((stage, index) => {
                 const Icon = stage.icon;
                 const isActive = stage.id === activeStage;
-                const isAvailable = stageAvailability[stage.id];
                 const isDone =
                   stage.id === 'learning' ||
                   (stage.id === 'quiz' && verification?.latestAttempt) ||
@@ -221,14 +324,13 @@ function LearningSessionPage() {
                 return (
                   <button
                     className={
-                      'flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors disabled:cursor-not-allowed disabled:text-gray-300 ' +
+                      'flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors ' +
                       (isActive
                         ? 'bg-blue-600 text-white'
                         : isDone
                           ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
                           : 'text-gray-500 hover:bg-gray-50')
                     }
-                    disabled={!isAvailable}
                     key={stage.id}
                     onClick={() => setActiveStage(stage.id)}
                     type="button"
@@ -256,22 +358,18 @@ function LearningSessionPage() {
                   {generateQuizMutation.isError ? (
                     <div className="space-y-3">
                       <ErrorMessage message={generateQuizMutation.error.message} />
-                      <button
-                        className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                        onClick={() => generateQuizMutation.mutate()}
-                        type="button"
-                      >
+                      <Button onClick={() => generateQuizMutation.mutate()} size="md">
                         重试
-                      </button>
+                      </Button>
                     </div>
                   ) : (
                     <p className="text-sm text-gray-400">AI 正在生成测验题目...</p>
                   )}
                 </div>
               ) : (
-                <form className="mt-5 space-y-5" onSubmit={handleQuizSubmit}>
+                <form className="mt-5 divide-y divide-gray-100" onSubmit={handleQuizSubmit}>
                   {verification.quiz.questions.map((question, index) => (
-                    <div className="rounded-lg border border-gray-200 p-4" key={question.id}>
+                    <div className="py-5 first:pt-0" key={question.id}>
                       <div className="mb-2">
                         <QuestionTypeBadge type={question.type} />
                       </div>
@@ -282,7 +380,7 @@ function LearningSessionPage() {
                         <div className="mt-3 space-y-2">
                           {question.options?.map((option) => (
                             <label
-                              className="flex min-h-9 items-center gap-2 rounded-md border border-gray-200 px-3 text-sm text-gray-700"
+                              className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md bg-gray-50 px-3 text-sm text-gray-700 transition-colors hover:bg-gray-100"
                               key={option}
                             >
                               <input
@@ -329,27 +427,29 @@ function LearningSessionPage() {
                       )}
                     </div>
                   ))}
-                  <button
-                    className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
-                    disabled={
-                      submitQuizMutation.isPending ||
-                      verification.quiz.questions.some(
-                        (question) => !quizAnswers[question.id]?.trim(),
-                      )
-                    }
-                    type="submit"
-                  >
-                    <CheckCircle2 size={15} />
-                    {submitQuizMutation.isPending ? '批改中...' : '提交测验'}
-                  </button>
-                  {verification.latestAttempt && (
-                    <p className="text-sm font-medium text-gray-700">
-                      最近一次测验得分：{verification.latestAttempt.score} 分
-                    </p>
-                  )}
-                  {submitQuizMutation.isError && (
-                    <ErrorMessage message={submitQuizMutation.error.message} />
-                  )}
+                  <div className="pt-5">
+                    <Button
+                      disabled={
+                        submitQuizMutation.isPending ||
+                        verification.quiz.questions.some(
+                          (question) => !quizAnswers[question.id]?.trim(),
+                        )
+                      }
+                      icon={<CheckCircle2 size={15} />}
+                      size="md"
+                      type="submit"
+                    >
+                      {submitQuizMutation.isPending ? '批改中...' : '提交测验'}
+                    </Button>
+                    {verification.latestAttempt && (
+                      <p className="text-sm font-medium text-gray-700">
+                        最近一次测验得分：{verification.latestAttempt.score} 分
+                      </p>
+                    )}
+                    {submitQuizMutation.isError && (
+                      <ErrorMessage message={submitQuizMutation.error.message} />
+                    )}
+                  </div>
                 </form>
               )}
             </section>
@@ -367,13 +467,9 @@ function LearningSessionPage() {
                   {generateTransferMutation.isError ? (
                     <div className="space-y-3">
                       <ErrorMessage message={generateTransferMutation.error.message} />
-                      <button
-                        className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700"
-                        onClick={() => generateTransferMutation.mutate()}
-                        type="button"
-                      >
+                      <Button onClick={() => generateTransferMutation.mutate()} size="md">
                         重试
-                      </button>
+                      </Button>
                     </div>
                   ) : (
                     <p className="text-sm text-gray-400">AI 正在生成迁移应用题...</p>
@@ -398,16 +494,16 @@ function LearningSessionPage() {
                         placeholder="基于本节所学，分析场景中的问题..."
                         value={transferDraft}
                       />
-                      <button
-                        className="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
+                      <Button
                         disabled={
                           transferDraft.trim().length < 10 || submitTransferMutation.isPending
                         }
+                        icon={<GitBranch size={15} />}
+                        size="md"
                         type="submit"
                       >
-                        <GitBranch size={15} />
                         {submitTransferMutation.isPending ? '评价中...' : '提交答案'}
-                      </button>
+                      </Button>
                       {submitTransferMutation.isError && (
                         <ErrorMessage message={submitTransferMutation.error.message} />
                       )}
@@ -452,17 +548,15 @@ function LearningSessionPage() {
                 title="本节总结"
               />
               {!verification?.summary ? (
-                <button
-                  className="mt-5 inline-flex h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
-                  disabled={
-                    !verification?.transfer?.userAnswer || generateSummaryMutation.isPending
-                  }
+                <Button
+                  className="mt-5"
+                  disabled={generateSummaryMutation.isPending}
+                  icon={<FileText size={15} />}
                   onClick={() => generateSummaryMutation.mutate()}
-                  type="button"
+                  size="md"
                 >
-                  <FileText size={15} />
                   {generateSummaryMutation.isPending ? '生成中...' : '生成总结'}
-                </button>
+                </Button>
               ) : (
                 <div className="mt-5 space-y-4">
                   <div className="rounded-lg border border-gray-200 bg-gray-50 p-4 text-sm text-gray-700">
@@ -483,72 +577,76 @@ function LearningSessionPage() {
         </main>
 
         <aside className="space-y-3 lg:sticky lg:top-6 lg:self-start">
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-gray-400">当前进度</p>
-            <div className="mt-2.5">
-              <div className="flex items-center justify-between text-sm">
-                <span className="font-medium text-gray-700 truncate pr-2">{goal.title}</span>
-                <span className="shrink-0 text-gray-500">{goal.progress}%</span>
+          <div className="rounded-lg border border-gray-200 bg-white">
+            <div className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-gray-400">当前进度</p>
+              <div className="mt-2.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="font-medium text-gray-700 truncate pr-2">{goal.title}</span>
+                  <span className="shrink-0 text-gray-500">{goal.progress}%</span>
+                </div>
+                <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-gray-100">
+                  <div
+                    className="h-full rounded-full bg-blue-600 transition-all duration-500"
+                    style={{ width: goal.progress + '%' }}
+                  />
+                </div>
               </div>
-              <div className="mt-1.5 h-1 overflow-hidden rounded-full bg-gray-100">
-                <div
-                  className="h-full rounded-full bg-blue-600 transition-all duration-500"
-                  style={{ width: goal.progress + '%' }}
-                />
-              </div>
-            </div>
-            <p className="mt-2 text-xs text-gray-400">
-              {completedSteps}/{goal.steps.length} 步完成
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-gray-400">验证进度</p>
-            <div className="mt-3 space-y-2 text-sm text-gray-600">
-              <ProgressLine done={Boolean(verification?.latestAttempt)} label="综合测验" />
-              <ProgressLine done={Boolean(verification?.transfer?.userAnswer)} label="迁移应用" />
-              <ProgressLine done={Boolean(verification?.summary)} label="学习总结" />
-            </div>
-            <p className="mt-3 text-xs text-gray-400">
-              {goal.learningConfig.assessmentMethods.map((m) => assessmentLabel[m] ?? m).join('、')}
-            </p>
-          </div>
-
-          <div className="rounded-lg border border-gray-200 bg-white p-4">
-            <p className="text-xs font-medium uppercase tracking-wider text-gray-400">当前阶段</p>
-            <p className="mt-1.5 text-sm font-medium text-gray-800">
-              {activeStageIndex + 1}. {stages[activeStageIndex]?.label}
-            </p>
-            {verification?.latestAttempt && (
-              <p className="mt-2 text-xs text-gray-500">
-                测验 {verification.latestAttempt.score} 分
+              <p className="mt-2 text-xs text-gray-400">
+                {completedSteps}/{goal.steps.length} 步完成
               </p>
-            )}
-            {verification?.transfer?.score !== undefined && (
-              <p className="mt-1 text-xs text-gray-500">迁移 {verification.transfer.score} 分</p>
+            </div>
+
+            <hr className="mx-4 border-gray-100" />
+
+            <div className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-gray-400">验证进度</p>
+              <div className="mt-3 space-y-2 text-sm text-gray-600">
+                <ProgressLine done={Boolean(verification?.latestAttempt)} label="综合测验" />
+                <ProgressLine done={Boolean(verification?.transfer?.userAnswer)} label="迁移应用" />
+                <ProgressLine done={Boolean(verification?.summary)} label="学习总结" />
+              </div>
+            </div>
+
+            <hr className="mx-4 border-gray-100" />
+
+            <div className="p-4">
+              <p className="text-xs font-medium uppercase tracking-wider text-gray-400">当前阶段</p>
+              <p className="mt-1.5 text-sm font-medium text-gray-800">
+                {activeStageIndex + 1}. {stages[activeStageIndex]?.label}
+              </p>
+              {verification?.latestAttempt && (
+                <p className="mt-2 text-xs text-gray-500">
+                  测验 {verification.latestAttempt.score} 分
+                </p>
+              )}
+              {verification?.transfer?.score !== undefined && (
+                <p className="mt-1 text-xs text-gray-500">迁移 {verification.transfer.score} 分</p>
+              )}
+            </div>
+
+            {nextStep && (
+              <>
+                <hr className="mx-4 border-gray-100" />
+                <div className="p-4">
+                  <p className="text-xs font-medium uppercase tracking-wider text-gray-400">
+                    下一步
+                  </p>
+                  <p className="mt-1.5 text-sm font-medium text-gray-800">{nextStep.title}</p>
+                </div>
+              </>
             )}
           </div>
 
-          {nextStep && (
-            <div className="rounded-lg border border-gray-200 bg-white p-4">
-              <p className="text-xs font-medium uppercase tracking-wider text-gray-400">下一步</p>
-              <p className="mt-1.5 text-sm font-medium text-gray-800">{nextStep.title}</p>
-            </div>
-          )}
-
-          <button
-            className="inline-flex w-full h-9 items-center justify-center gap-2 rounded-md bg-blue-600 px-4 text-sm font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-400"
-            disabled={
-              step.status === 'done' ||
-              !verification?.canCompleteStep ||
-              completeStepMutation.isPending
-            }
+          <Button
+            className="w-full justify-center"
+            disabled={step.status === 'done' || completeStepMutation.isPending}
+            icon={<CheckCircle2 size={15} />}
             onClick={handleCompleteStep}
-            type="button"
+            size="md"
           >
-            <CheckCircle2 size={15} />
             {step.status === 'done' ? '已完成' : '完成本节'}
-          </button>
+          </Button>
           {completeStepMutation.isError && (
             <ErrorMessage message={completeStepMutation.error.message} />
           )}

@@ -160,11 +160,17 @@ export class GenerateLearningPathOutputDto {
 }
 
 export class ChatMessageDto {
+  @ApiPropertyOptional({ example: 'cmqtdnd6p0000xcobs2uqh888' })
+  id?: string;
+
   @ApiProperty({ enum: ['user', 'assistant'], example: 'assistant' })
   role!: string;
 
   @ApiProperty({ example: '我们先看当前 Step 要解决的问题。' })
   content!: string;
+
+  @ApiPropertyOptional({ enum: ['streaming', 'complete'], example: 'complete' })
+  status?: string;
 }
 
 export class ChatSessionResponseDto {
@@ -184,6 +190,12 @@ export class ChatSessionInputDto {
 
   @ApiPropertyOptional({ example: '这里为什么需要 DNS？' })
   userMessage?: string;
+
+  @ApiPropertyOptional({ example: '请开始当前 Step「理解网络请求阶段」的教学。' })
+  silentUserMessage?: string;
+
+  @ApiPropertyOptional({ example: 'cmqtdnd6p0000xcobs2uqh888' })
+  continueAssistantMessageId?: string;
 }
 
 export class SseDeltaEventDto {

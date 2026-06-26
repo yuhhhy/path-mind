@@ -59,12 +59,15 @@ export const chatSessionSchema = z.object({
   step: learningStepSchema,
   messages: z.array(
     z.object({
+      id: z.string().min(1).optional(),
       role: z.enum(['user', 'assistant']),
       content: z.string().min(1),
+      status: z.enum(['streaming', 'complete']).optional(),
     }),
   ),
   userMessage: z.string().min(1).optional(),
   silentUserMessage: z.string().min(1).optional(),
+  continueAssistantMessageId: z.string().min(1).optional(),
 });
 
 export type ChatSessionDto = z.infer<typeof chatSessionSchema>;

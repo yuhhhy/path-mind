@@ -187,9 +187,15 @@ export function streamGoalSteps(goalId: string, callbacks: StepStreamCallbacks):
   };
 }
 
-export async function completeStep(goalId: string, stepId: string): Promise<Goal> {
+export async function completeStep(
+  goalId: string,
+  stepId: string,
+  options: { force?: boolean } = {},
+): Promise<Goal> {
   const response = await fetch(`${API_BASE_URL}/goals/${goalId}/steps/${stepId}/complete`, {
     method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ force: options.force === true }),
   });
 
   return parseJsonResponse(response, 'AI 服务暂时不可用，请检查后端服务或数据库。');

@@ -2,12 +2,15 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, Outlet, createFileRoute, useNavigate, useRouterState } from '@tanstack/react-router';
 import { MoreHorizontal, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { useAIGenerationStore } from '../features/ai-generation/aiGenerationStore';
+import { getTeachingGenerationStatuses } from '../features/chat/api';
 import { deleteGoal, streamGoalSteps } from '../features/goal/api';
 import { LearningPath } from '../features/goal/LearningPath';
 import { mockGoals } from '../features/goal/mockGoals';
 import { goalQueryOptions, goalsQueryOptions } from '../features/goal/queries';
 import type { Goal, LearningStep } from '../features/goal/types';
 import { useBreadcrumb } from '../shared/layout/BreadcrumbContext';
+import { LinkButton } from '../shared/ui/Button';
 
 export const Route = createFileRoute('/goals/$goalId')({
   component: GoalDetailPage,
@@ -48,6 +51,8 @@ function GoalDetailPage() {
   const goalsOptions = useMemo(() => goalsQueryOptions(), []);
   const goalQuery = useQuery(goalOptions);
   const goal = goalQuery.data ?? (goalQuery.isError ? fallbackGoal : undefined);
+  const goalStatus = goal?.status;
+  const goalTitle = goal?.title ?? '';
 
   const [streamedSteps, setStreamedSteps] = useState<LearningStep[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -55,11 +60,19 @@ function GoalDetailPage() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isGoalMenuOpen, setIsGoalMenuOpen] = useState(false);
   const streamStarted = useRef(false);
+  const streamedStepOrderRef = useRef(new Map<string, number>());
+  const upsertTask = useAIGenerationStore((state) => state.upsertTask);
+  const setTaskStatus = useAIGenerationStore((state) => state.setTaskStatus);
+  const displayedSteps = useMemo(
+    () => (goal ? mergeSteps(goal.steps, streamedSteps) : streamedSteps),
+    [goal, streamedSteps],
+  );
+  const displayedStepIdsKey = displayedSteps.map((step) => step.id).join('|');
 
   useBreadcrumb([{ label: '学习目标', href: '/goals' }, { label: goal?.title ?? '' }]);
 
   useEffect(() => {
-    if (goal?.status !== 'initializing') {
+    if (goalStatus !== 'initializing') {
       return;
     }
     if (streamStarted.current) {
@@ -69,9 +82,66 @@ function GoalDetailPage() {
 
     let cleanup: (() => void) | undefined;
     const startTimer = window.setTimeout(() => {
+      const currentGoal = queryClient.getQueryData<Goal>(goalOptions.queryKey);
+      streamedStepOrderRef.current = new Map(
+        (currentGoal?.steps ?? []).map((step, index) => [step.id, index + 1]),
+      );
       setIsStreaming(true);
+      setTaskStatus('goal:path:queued', 'running', {
+        description: `正在生成「${goalTitle}」的学习路径`,
+      });
+      upsertTask({
+        id: `goal:${goalId}:outline`,
+        title: '规划目标与最终成果',
+        description: goalTitle,
+        status: 'running',
+        scope: { goalId },
+      });
+      upsertTask({
+        id: `goal:${goalId}:steps`,
+        title: '拆解学习路径 Step',
+        description: '等待 AI 输出第 1 个 Step',
+        status: 'queued',
+        scope: { goalId },
+      });
       cleanup = streamGoalSteps(goalId, {
         onStep(step) {
+          setTaskStatus(`goal:${goalId}:outline`, 'done', {
+            description: '目标说明与最终成果已生成',
+          });
+          if (!streamedStepOrderRef.current.has(step.id)) {
+            streamedStepOrderRef.current.set(step.id, streamedStepOrderRef.current.size + 1);
+          }
+          const stepNumber = streamedStepOrderRef.current.get(step.id) ?? 1;
+          const generatedCount = streamedStepOrderRef.current.size;
+
+          upsertTask({
+            id: `goal:${goalId}:step:${step.id}`,
+            title: `Step ${stepNumber}：${step.title}`,
+            description: step.description,
+            status: 'done',
+            scope: { goalId, stepId: step.id },
+          });
+          upsertTask({
+            id: `goal:${goalId}:steps`,
+            title: '拆解学习路径 Step',
+            description: `已生成 ${generatedCount} 个 Step，正在等待下一个`,
+            status: 'running',
+            scope: { goalId },
+          });
+          upsertTask({
+            id: `goal:${goalId}:next-step`,
+            title: '生成下一个学习 Step',
+            description: 'AI 正在继续拆分后续学习内容',
+            status: 'queued',
+            scope: { goalId },
+          });
+          upsertTask({
+            id: `step:${step.id}:teaching`,
+            title: `生成 Step ${stepNumber} 讲解`,
+            status: 'queued',
+            scope: { goalId, stepId: step.id },
+          });
           setStreamedSteps((prev) => mergeSteps(prev, [step]));
           queryClient.setQueryData<Goal>(goalOptions.queryKey, (current) => {
             if (!current) return current;
@@ -83,6 +153,12 @@ function GoalDetailPage() {
         },
         onDone() {
           setIsStreaming(false);
+          setTaskStatus('goal:path:queued', 'done', { description: '学习路径已生成完成' });
+          setTaskStatus(`goal:${goalId}:outline`, 'done', {
+            description: '目标说明与最终成果已生成',
+          });
+          setTaskStatus(`goal:${goalId}:steps`, 'done', { description: '所有 Step 已保存' });
+          setTaskStatus(`goal:${goalId}:next-step`, 'done', { title: '学习路径生成完成' });
           queryClient.setQueryData<Goal>(goalOptions.queryKey, (current) =>
             current ? { ...current, status: 'active' } : current,
           );
@@ -91,6 +167,10 @@ function GoalDetailPage() {
         onError(error) {
           setIsStreaming(false);
           setStreamError(error.message);
+          setTaskStatus('goal:path:queued', 'failed', { error: error.message });
+          setTaskStatus(`goal:${goalId}:outline`, 'failed', { error: error.message });
+          setTaskStatus(`goal:${goalId}:steps`, 'failed', { error: error.message });
+          setTaskStatus(`goal:${goalId}:next-step`, 'failed', { error: error.message });
         },
       });
     }, 0);
@@ -98,10 +178,61 @@ function GoalDetailPage() {
     return () => {
       window.clearTimeout(startTimer);
       streamStarted.current = false;
+      streamedStepOrderRef.current = new Map();
       setIsStreaming(false);
       cleanup?.();
     };
-  }, [goal?.status, goalId, goalOptions.queryKey, queryClient]);
+  }, [goalStatus, goalTitle, goalId, goalOptions.queryKey, queryClient, setTaskStatus, upsertTask]);
+
+  useEffect(() => {
+    if (displayedSteps.length === 0) {
+      return;
+    }
+
+    let cancelled = false;
+    let intervalId: number | undefined;
+
+    const syncTeachingStatuses = async () => {
+      try {
+        const result = await getTeachingGenerationStatuses(goalId);
+        if (cancelled) return;
+
+        const statusByStepId = new Map(result.steps.map((step) => [step.stepId, step.status]));
+        let hasActiveTeachingTask = false;
+
+        displayedSteps.forEach((step, index) => {
+          const status = statusByStepId.get(step.id) ?? 'queued';
+          if (status !== 'done') {
+            hasActiveTeachingTask = true;
+          }
+
+          upsertTask({
+            id: `step:${step.id}:teaching`,
+            title: `生成 Step ${index + 1} 讲解`,
+            status,
+            scope: { goalId, stepId: step.id },
+          });
+        });
+
+        if (!hasActiveTeachingTask && intervalId !== undefined) {
+          window.clearInterval(intervalId);
+          intervalId = undefined;
+        }
+      } catch {
+        // Teaching status is best-effort UI telemetry; keep the path stream unaffected.
+      }
+    };
+
+    void syncTeachingStatuses();
+    intervalId = window.setInterval(syncTeachingStatuses, 2000);
+
+    return () => {
+      cancelled = true;
+      if (intervalId !== undefined) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [displayedStepIdsKey, displayedSteps, goalId, upsertTask]);
 
   if (isSessionRoute) {
     return <Outlet />;
@@ -122,7 +253,6 @@ function GoalDetailPage() {
   }
 
   const isInitializing = goal.status === 'initializing';
-  const displayedSteps = mergeSteps(goal.steps, streamedSteps);
   const displayedGoal: Goal = { ...goal, steps: displayedSteps };
   const isPathGenerating = isInitializing || isStreaming;
 
@@ -283,23 +413,35 @@ function GoalDetailPage() {
                           </p>
                         </div>
                         <div className="flex shrink-0 items-center gap-2.5">
+                          <span className="inline-flex h-6 items-center rounded-md bg-emerald-50 px-2 text-xs font-medium text-emerald-700">
+                            已生成
+                          </span>
                           <span className="text-xs text-gray-400">
                             {step.estimatedMinutes} 分钟
                           </span>
-                          <Link
-                            className="inline-flex h-7 items-center justify-center rounded-md border border-gray-300 bg-white px-3 text-xs font-medium text-gray-600 transition-colors hover:bg-gray-50"
+                          <LinkButton
+                            className="justify-center px-3"
+                            tone="secondary"
                             to="/goals/$goalId/session/$stepId"
                             params={{ goalId, stepId: step.id }}
                           >
                             开始
-                          </Link>
+                          </LinkButton>
                         </div>
                       </div>
                     </div>
                   </div>
                 </article>
               ))}
-              {isStreaming && <StepSkeleton />}
+              {isStreaming && (
+                <div className="space-y-2">
+                  <div className="inline-flex items-center gap-2 rounded-md bg-blue-50 px-2.5 py-1 text-xs font-medium text-blue-700">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-blue-500" />
+                    正在生成下一个 Step
+                  </div>
+                  <StepSkeleton />
+                </div>
+              )}
               {streamError && (
                 <p className="rounded-md border border-red-100 bg-red-50 px-3 py-2 text-sm text-red-600">
                   {streamError}

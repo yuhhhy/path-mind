@@ -44,8 +44,12 @@ export class GoalsController {
   }
 
   @Patch(':goalId/steps/:stepId/complete')
-  completeStep(@Param('goalId') goalId: string, @Param('stepId') stepId: string) {
-    return this.goalsService.completeStep(goalId, stepId);
+  completeStep(
+    @Param('goalId') goalId: string,
+    @Param('stepId') stepId: string,
+    @Body() body: { force?: boolean } = {},
+  ) {
+    return this.goalsService.completeStep(goalId, stepId, { force: body.force === true });
   }
 
   @Delete(':goalId')

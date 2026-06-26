@@ -12,6 +12,14 @@ interface StreamChatCallbacks {
 export interface StreamChatSessionInput extends ChatSessionInput {
   userMessage?: string;
   silentUserMessage?: string;
+  continueAssistantMessageId?: string;
+}
+
+export type TeachingGenerationStatus = 'queued' | 'running' | 'done';
+
+export interface TeachingGenerationStatusItem {
+  stepId: string;
+  status: TeachingGenerationStatus;
 }
 
 export async function getChatSession(
@@ -25,6 +33,18 @@ export async function getChatSession(
   }
 
   return response.json() as Promise<{ messages: ChatMessage[] }>;
+}
+
+export async function getTeachingGenerationStatuses(
+  goalId: string,
+): Promise<{ steps: TeachingGenerationStatusItem[] }> {
+  const response = await fetch(`${API_BASE_URL}/chat/teaching-status?goalId=${goalId}`);
+
+  if (!response.ok) {
+    throw new Error('AI 教学讲解状态暂时不可用。');
+  }
+
+  return response.json() as Promise<{ steps: TeachingGenerationStatusItem[] }>;
 }
 
 export async function streamChatSession(
