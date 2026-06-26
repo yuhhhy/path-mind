@@ -187,8 +187,8 @@ export class LearningPathService {
     this.pendingInitialChatPrewarm.push(async () => {
       try {
         await this.generateInitialChatForStep(goalId, stepId);
-      } catch (error) {
-        console.error(`[prewarm] step ${stepId} failed:`, error);
+      } catch {
+        // silently swallow — prewarm failures are non-critical
       } finally {
         this.prewarmingStepIds.delete(stepId);
       }

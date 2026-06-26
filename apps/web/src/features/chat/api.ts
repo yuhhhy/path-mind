@@ -62,6 +62,6 @@ export function streamChatSession(
         callbacks.onError(new Error(event.message));
       }
     },
-    callbacks.onError,
+    (error) => callbacks.onError(error),
   );
 }

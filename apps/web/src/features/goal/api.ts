@@ -138,7 +138,7 @@ export function streamGoalSteps(goalId: string, callbacks: StepStreamCallbacks):
         callbacks.onError(new Error(event.message));
       }
     },
-    callbacks.onError,
+    (error) => callbacks.onError(error),
   );
 }
 
