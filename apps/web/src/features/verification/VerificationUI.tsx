@@ -103,9 +103,9 @@ function AttemptFeedback({
 
 function SubmittedQuizAnswer({ answer }: { answer: string }) {
   return (
-    <div className="mt-3 rounded-lg border border-orange-100 bg-orange-50 p-4">
-      <p className="text-xs font-medium uppercase tracking-wider text-orange-400">你的回答</p>
-      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-orange-900">{answer}</p>
+    <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-100 p-4">
+      <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">你的回答</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">{answer}</p>
     </div>
   );
 }
@@ -335,11 +335,11 @@ export function TransferSection({
             </form>
           ) : (
             <div className="space-y-5">
-              <div className="rounded-lg border border-orange-100 bg-orange-50 p-4">
-                <p className="text-xs font-medium uppercase tracking-wider text-orange-400">
+              <div className="rounded-lg border border-neutral-200 bg-neutral-100 p-4">
+                <p className="text-xs font-medium uppercase tracking-wider text-neutral-500">
                   你的回答
                 </p>
-                <p className="mt-2 text-sm leading-relaxed text-orange-900 whitespace-pre-wrap">
+                <p className="mt-2 text-sm leading-relaxed text-neutral-700 whitespace-pre-wrap">
                   {transfer.userAnswer}
                 </p>
               </div>
