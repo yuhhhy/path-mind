@@ -36,7 +36,6 @@ function DashboardPage() {
   const goals = goalsQuery.data ?? (goalsQuery.isError ? mockGoals : []);
   const upsertTask = useAIGenerationStore((state) => state.upsertTask);
   const setTaskStatus = useAIGenerationStore((state) => state.setTaskStatus);
-  const setPanelOpen = useAIGenerationStore((state) => state.setPanelOpen);
 
   const [goalTitle, setGoalTitle] = useState(DEFAULT_GOAL_TITLE);
 
@@ -67,7 +66,6 @@ function DashboardPage() {
         description: '等待目标创建完成后开始规划 Step',
         status: 'queued',
       });
-      setPanelOpen(true);
     },
     onSuccess({ goalId }) {
       setTaskStatus('goal:create', 'done', { description: '学习目标草稿已创建' });

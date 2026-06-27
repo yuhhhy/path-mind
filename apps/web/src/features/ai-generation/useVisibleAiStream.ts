@@ -49,7 +49,6 @@ export function useVisibleAiStream<TArgs, TData>({
   });
   const upsertTask = useAIGenerationStore((state) => state.upsertTask);
   const setTaskStatus = useAIGenerationStore((state) => state.setTaskStatus);
-  const setPanelOpen = useAIGenerationStore((state) => state.setPanelOpen);
 
   useEffect(() => {
     callbacksRef.current = {
@@ -76,8 +75,7 @@ export function useVisibleAiStream<TArgs, TData>({
       title: runningTitle ?? task.title,
       status: 'running',
     });
-    setPanelOpen(true);
-  }, [runningTitle, setPanelOpen, task, upsertTask]);
+  }, [runningTitle, task, upsertTask]);
 
   const start = useCallback(
     (args: TArgs) => {
@@ -88,7 +86,6 @@ export function useVisibleAiStream<TArgs, TData>({
       setIsActive(true);
       setIsVisibleStreaming(false);
       upsertTask({ ...task, status: 'queued' });
-      setPanelOpen(true);
 
       cleanupRef.current = stream(args, {
         onState(data) {
@@ -119,7 +116,7 @@ export function useVisibleAiStream<TArgs, TData>({
         },
       });
     },
-    [promoteToRunning, setPanelOpen, setTaskStatus, stop, stream, task, upsertTask],
+    [promoteToRunning, setTaskStatus, stop, stream, task, upsertTask],
   );
 
   useEffect(() => {

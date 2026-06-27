@@ -1,13 +1,10 @@
 import type { Quiz, QuizAttemptAnswer, StepSummary, Transfer } from '@pathmind/shared';
 import { CheckCircle2, FileText, GitBranch } from 'lucide-react';
-import { Suspense, lazy } from 'react';
 import type { FormEvent } from 'react';
 import { Button } from '../../shared/ui/Button';
+import { StreamingMarkdown } from '../ai-generation/StreamingMarkdown';
 import { StreamingOutputBlock } from '../ai-generation/StreamingOutputBlock';
-
-const MarkdownRenderer = lazy(() =>
-  import('../chat/MarkdownRenderer').then((m) => ({ default: m.MarkdownRenderer })),
-);
+import { LazyMarkdownRenderer } from '../chat/LazyMarkdownRenderer';
 
 // ---------------------------------------------------------------------------
 // Shared primitives
@@ -99,9 +96,16 @@ function AttemptFeedback({
         (answer.isCorrect ? 'border-emerald-100 bg-emerald-50' : 'border-amber-100 bg-amber-50')
       }
     >
-      <Suspense fallback={<p className="text-sm text-gray-400">渲染中...</p>}>
-        <MarkdownRenderer content={answer.feedback} />
-      </Suspense>
+      <LazyMarkdownRenderer content={answer.feedback} />
+    </div>
+  );
+}
+
+function SubmittedQuizAnswer({ answer }: { answer: string }) {
+  return (
+    <div className="mt-3 rounded-lg border border-orange-100 bg-orange-50 p-4">
+      <p className="text-xs font-medium uppercase tracking-wider text-orange-400">你的回答</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-orange-900">{answer}</p>
     </div>
   );
 }
@@ -163,62 +167,79 @@ export function QuizSection({
         </div>
       ) : (
         <form className="mt-5 divide-y divide-gray-100" onSubmit={onSubmit}>
-          {quiz.questions.map((question, index) => (
-            <div className="py-5 first:pt-0" key={question.id}>
-              <div className="mb-2">
-                <QuestionTypeBadge type={question.type} />
-              </div>
-              <p className="text-sm font-semibold text-gray-900">
-                {index + 1}. {question.question}
-              </p>
-              {question.type === 'single_choice' ? (
-                <div className="mt-3 space-y-2">
-                  {question.options?.map((option) => (
-                    <label
-                      className="flex min-h-9 cursor-pointer items-center gap-2 rounded-md bg-gray-50 px-3 text-sm text-gray-700 transition-colors hover:bg-gray-100"
-                      key={option}
-                    >
-                      <input
-                        checked={quizAnswers[question.id] === option}
-                        className="size-4"
-                        name={question.id}
-                        onChange={() => onAnswerChange(question.id, option)}
-                        type="radio"
-                      />
-                      <span>{option}</span>
-                    </label>
-                  ))}
+          {quiz.questions.map((question, index) => {
+            const attemptAnswer = latestAttempt?.answers.find(
+              (answer) => answer.questionId === question.id,
+            );
+
+            return (
+              <div className="py-5 first:pt-0" key={question.id}>
+                <div className="mb-2">
+                  <QuestionTypeBadge type={question.type} />
                 </div>
-              ) : (
-                <textarea
-                  className="mt-3 min-h-28 w-full resize-y rounded-md border border-gray-200 px-3 py-2 text-sm leading-6 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-500"
-                  onChange={(event) => onAnswerChange(question.id, event.target.value)}
-                  placeholder={
-                    question.type === 'explain_back'
-                      ? '用自己的话讲一遍，不要复制 AI 的原文...'
-                      : '结合具体场景分析...'
-                  }
-                  value={quizAnswers[question.id] ?? ''}
-                />
-              )}
-              {latestAttempt?.answers.find((a) => a.questionId === question.id) && (
-                <AttemptFeedback
-                  answer={latestAttempt.answers.find((a) => a.questionId === question.id)}
-                />
-              )}
-            </div>
-          ))}
+                <p className="text-sm font-semibold text-gray-900">
+                  {index + 1}. {question.question}
+                </p>
+                {question.type === 'single_choice' ? (
+                  <div className="mt-3 space-y-2">
+                    {question.options?.map((option) => (
+                      <label
+                        className={
+                          'flex min-h-9 items-center gap-2 rounded-md bg-gray-50 px-3 text-sm text-gray-700 ' +
+                          (attemptAnswer
+                            ? 'cursor-default'
+                            : 'cursor-pointer transition-colors hover:bg-gray-100')
+                        }
+                        key={option}
+                      >
+                        <input
+                          checked={
+                            attemptAnswer
+                              ? attemptAnswer.answer === option
+                              : quizAnswers[question.id] === option
+                          }
+                          className="size-4"
+                          disabled={Boolean(attemptAnswer)}
+                          name={question.id}
+                          onChange={() => onAnswerChange(question.id, option)}
+                          type="radio"
+                        />
+                        <span>{option}</span>
+                      </label>
+                    ))}
+                  </div>
+                ) : attemptAnswer ? (
+                  <SubmittedQuizAnswer answer={attemptAnswer.answer} />
+                ) : (
+                  <textarea
+                    className="mt-3 min-h-28 w-full resize-y rounded-md border border-gray-200 px-3 py-2 text-sm leading-6 outline-none transition-colors placeholder:text-gray-400 focus:border-blue-500"
+                    onChange={(event) => onAnswerChange(question.id, event.target.value)}
+                    placeholder={
+                      question.type === 'explain_back'
+                        ? '用自己的话讲一遍，不要复制 AI 的原文...'
+                        : '结合具体场景分析...'
+                    }
+                    value={quizAnswers[question.id] ?? ''}
+                  />
+                )}
+                {attemptAnswer && <AttemptFeedback answer={attemptAnswer} />}
+              </div>
+            );
+          })}
           <div className="pt-5">
-            <Button
-              disabled={
-                isSubmitting || quiz.questions.some((question) => !quizAnswers[question.id]?.trim())
-              }
-              icon={<CheckCircle2 size={15} />}
-              size="md"
-              type="submit"
-            >
-              {isSubmitting ? '批改中...' : '提交测验'}
-            </Button>
+            {!latestAttempt && (
+              <Button
+                disabled={
+                  isSubmitting ||
+                  quiz.questions.some((question) => !quizAnswers[question.id]?.trim())
+                }
+                icon={<CheckCircle2 size={15} />}
+                size="md"
+                type="submit"
+              >
+                {isSubmitting ? '批改中...' : '提交测验'}
+              </Button>
+            )}
             {latestAttempt && (
               <p className="mt-2 text-sm font-medium text-gray-700">
                 最近一次测验得分：{latestAttempt.score} 分
@@ -286,16 +307,11 @@ export function TransferSection({
           <div>
             <p className="text-sm font-medium uppercase tracking-wider text-gray-400">场景题目</p>
             <div className="mt-2">
-              {transfer.promptStatus === 'streaming' ? (
-                <StreamingOutputBlock
-                  content={transfer.prompt}
-                  placeholder="AI 正在生成迁移应用题..."
-                />
-              ) : (
-                <Suspense fallback={<p className="text-sm text-gray-400">渲染中...</p>}>
-                  <MarkdownRenderer content={transfer.prompt} />
-                </Suspense>
-              )}
+              <StreamingMarkdown
+                content={transfer.prompt}
+                jsonField={transfer.promptStatus === 'streaming' ? 'prompt' : undefined}
+                placeholder="AI 正在生成迁移应用题..."
+              />
             </div>
           </div>
 
@@ -340,16 +356,11 @@ export function TransferSection({
                     )}
                   </div>
                   <div className="mt-3">
-                    {transfer.feedbackStatus === 'streaming' ? (
-                      <StreamingOutputBlock
-                        content={transfer.aiFeedback}
-                        placeholder="AI 正在评价迁移应用..."
-                      />
-                    ) : (
-                      <Suspense fallback={<p className="text-sm text-gray-400">渲染中...</p>}>
-                        <MarkdownRenderer content={transfer.aiFeedback} />
-                      </Suspense>
-                    )}
+                    <StreamingMarkdown
+                      content={transfer.aiFeedback}
+                      jsonField={transfer.feedbackStatus === 'streaming' ? 'feedback' : undefined}
+                      placeholder="AI 正在评价迁移应用..."
+                    />
                   </div>
                 </div>
               )}
@@ -397,17 +408,13 @@ export function SummarySection({
         </Button>
       ) : (
         <div className="mt-5 space-y-4">
-          {summary.status === 'streaming' ? (
-            <StreamingOutputBlock
-              content={summary.content}
-              maxHeightClassName="max-h-96"
-              placeholder="AI 正在生成学习总结..."
-            />
-          ) : (
+          <StreamingMarkdown
+            content={summary.content}
+            jsonField={summary.status === 'streaming' ? 'content' : undefined}
+            placeholder="AI 正在生成学习总结..."
+          />
+          {summary.status === 'complete' && (
             <>
-              <Suspense fallback={<p className="text-sm text-gray-400">渲染中...</p>}>
-                <MarkdownRenderer content={summary.content} />
-              </Suspense>
               <FeedbackList title="关键收获" items={summary.keyTakeaways} />
               <FeedbackList title="薄弱点" items={summary.weakPoints} />
               <FeedbackList title="下一步建议" items={summary.nextSuggestions} />

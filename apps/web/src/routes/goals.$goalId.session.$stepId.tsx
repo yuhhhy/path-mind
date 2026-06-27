@@ -1,6 +1,6 @@
 import type { StepVerification } from '@pathmind/shared';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, createFileRoute, useNavigate } from '@tanstack/react-router';
+import { Link, createFileRoute, useNavigate, useRouterState } from '@tanstack/react-router';
 import { Brain, CheckCircle2, FileText, GitBranch, ListChecks } from 'lucide-react';
 import type { FormEvent } from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -48,8 +48,16 @@ const stages: Array<{
   { id: 'summary', label: '总结', icon: FileText },
 ];
 
+const verificationStageIds = new Set<VerificationStage>(stages.map((stage) => stage.id));
+
+function parseVerificationStage(hash: string): VerificationStage {
+  const stage = hash.replace(/^#/, '') as VerificationStage;
+  return verificationStageIds.has(stage) ? stage : 'learning';
+}
+
 function LearningSessionPage() {
   const navigate = useNavigate();
+  const locationHash = useRouterState({ select: (state) => state.location.hash });
   const queryClient = useQueryClient();
   const { goalId, stepId } = Route.useParams();
   const fallbackGoal = mockGoals.find((item) => item.id === goalId);
@@ -60,7 +68,7 @@ function LearningSessionPage() {
   const verificationQuery = useQuery(verificationOptions);
   const goal = goalQuery.data ?? (goalQuery.isError ? fallbackGoal : undefined);
   const verification = verificationQuery.data;
-  const [activeStage, setActiveStage] = useState<VerificationStage>('learning');
+  const activeStage = parseVerificationStage(locationHash);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, string>>({});
   const [transferDraft, setTransferDraft] = useState('');
   const step = goal?.steps.find((item) => item.id === stepId);
@@ -408,7 +416,7 @@ function LearningSessionPage() {
                 return (
                   <button
                     className={
-                      'flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors ' +
+                      'flex h-11 items-center justify-center gap-2 rounded-md text-sm font-medium transition-colors cursor-pointer ' +
                       (isActive
                         ? 'bg-blue-600 text-white'
                         : isDone
@@ -416,7 +424,7 @@ function LearningSessionPage() {
                           : 'text-gray-500 hover:bg-gray-50')
                     }
                     key={stage.id}
-                    onClick={() => setActiveStage(stage.id)}
+                    onClick={() => void navigate({ hash: stage.id })}
                     type="button"
                   >
                     <Icon size={15} />

@@ -5,7 +5,7 @@ type ButtonTone = 'primary' | 'secondary';
 type ButtonSize = 'sm' | 'md';
 
 const baseClassName =
-  'inline-flex items-center rounded-md font-medium transition-colors disabled:cursor-not-allowed';
+  'inline-flex items-center rounded-md font-medium transition-colors cursor-pointer disabled:cursor-not-allowed';
 
 const toneClassName: Record<ButtonTone, string> = {
   primary: 'bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-100 disabled:text-gray-400',

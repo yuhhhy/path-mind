@@ -35,15 +35,19 @@ function parseBody<T>(schema: ZodType<T>, body: unknown, inputName: string): T {
 async function writeVerificationStream(
   req: IncomingMessage,
   res: ServerResponse,
-  stream: () => AsyncGenerator<
+  stream: (
+    signal: AbortSignal,
+  ) => AsyncGenerator<
     | { type: 'delta'; content: string }
     | { type: 'state'; data: unknown }
     | { type: 'done'; data: unknown }
   >,
 ) {
   let closed = false;
+  const controller = new AbortController();
   req.on('close', () => {
     closed = true;
+    controller.abort();
   });
 
   res.statusCode = 200;
@@ -53,7 +57,7 @@ async function writeVerificationStream(
   res.flushHeaders?.();
 
   try {
-    for await (const event of stream()) {
+    for await (const event of stream(controller.signal)) {
       if (!closed) writeSse(res, event);
     }
     if (!closed) res.end();
@@ -93,8 +97,8 @@ export class VerificationController {
     @Res() res: ServerResponse,
   ) {
     const input = parseBody(generateQuizSchema, body, 'GenerateQuizInput');
-    return writeVerificationStream(req, res, () =>
-      this.verificationService.streamQuiz(stepId, input),
+    return writeVerificationStream(req, res, (signal) =>
+      this.verificationService.streamQuiz(stepId, input, signal),
     );
   }
 
@@ -122,8 +126,8 @@ export class VerificationController {
     @Res() res: ServerResponse,
   ) {
     const input = parseBody(generateTransferSchema, body, 'GenerateTransferInput');
-    return writeVerificationStream(req, res, () =>
-      this.verificationService.streamTransfer(stepId, input),
+    return writeVerificationStream(req, res, (signal) =>
+      this.verificationService.streamTransfer(stepId, input, signal),
     );
   }
 
@@ -143,8 +147,8 @@ export class VerificationController {
     @Res() res: ServerResponse,
   ) {
     const input = parseBody(submitTransferSchema, body, 'SubmitTransferInput');
-    return writeVerificationStream(req, res, () =>
-      this.verificationService.streamSubmitTransfer(stepId, input),
+    return writeVerificationStream(req, res, (signal) =>
+      this.verificationService.streamSubmitTransfer(stepId, input, signal),
     );
   }
 
@@ -164,8 +168,8 @@ export class VerificationController {
     @Res() res: ServerResponse,
   ) {
     const input = parseBody(generateSummarySchema, body, 'GenerateSummaryInput');
-    return writeVerificationStream(req, res, () =>
-      this.verificationService.streamSummary(stepId, input),
+    return writeVerificationStream(req, res, (signal) =>
+      this.verificationService.streamSummary(stepId, input, signal),
     );
   }
 }

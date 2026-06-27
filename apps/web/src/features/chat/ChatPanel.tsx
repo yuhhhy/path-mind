@@ -1,16 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FormEvent } from 'react';
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Button } from '../../shared/ui/Button';
 import { useAIGenerationStore } from '../ai-generation/aiGenerationStore';
 import type { ChatMessage, Goal, LearningStep } from '../goal/types';
 import { streamChatSession } from './api';
+import { LazyMarkdownRenderer } from './LazyMarkdownRenderer';
 import { chatSessionQueryOptions } from './queries';
-
-// Lazy-load to split shiki/rehype-pretty-code out of the main bundle
-const MarkdownRenderer = lazy(() =>
-  import('./MarkdownRenderer').then((m) => ({ default: m.MarkdownRenderer })),
-);
 
 interface ChatPanelProps {
   goal: Goal;
@@ -29,17 +25,17 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
   const [error, setError] = useState('');
   const abortRef = useRef<AbortController | null>(null);
   const autoStartKeyRef = useRef('');
+  const isStreamingRef = useRef(false);
   const upsertTask = useAIGenerationStore((state) => state.upsertTask);
   const setTaskStatus = useAIGenerationStore((state) => state.setTaskStatus);
-  const setPanelOpen = useAIGenerationStore((state) => state.setPanelOpen);
 
   const chatQuery = useQuery(chatOptions);
 
   useEffect(() => {
-    if (!isStreaming && chatQuery.data) {
+    if (!isStreamingRef.current && chatQuery.data) {
       setMessages(chatQuery.data.messages);
     }
-  }, [chatQuery.data, isStreaming]);
+  }, [chatQuery.data]);
 
   useEffect(() => {
     return () => {
@@ -99,6 +95,7 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
         visibleMessages.at(-1)?.status === 'streaming';
 
       abortRef.current = abortController;
+      isStreamingRef.current = true;
       setError('');
       setIsStreaming(true);
       setMessages(
@@ -112,7 +109,6 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
         status: 'running',
         scope: { goalId: goal.id, stepId: step.id },
       });
-      setPanelOpen(true);
 
       streamChatSession(
         {
@@ -128,12 +124,14 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
             appendAssistantDelta(content);
           },
           onDone() {
+            isStreamingRef.current = false;
             setIsStreaming(false);
             completeLastAssistantMessage();
             setTaskStatus(taskId, 'done', { title: `${taskTitle}完成` });
             void queryClient.invalidateQueries({ queryKey: chatOptions.queryKey });
           },
           onError(streamError) {
+            isStreamingRef.current = false;
             setError(streamError.message || 'AI 服务暂时不可用，请检查后端服务或 API Key。');
             setIsStreaming(false);
             setTaskStatus(taskId, 'failed', {
@@ -150,7 +148,6 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
       completeLastAssistantMessage,
       goal,
       queryClient,
-      setPanelOpen,
       setTaskStatus,
       step,
       upsertTask,
@@ -249,9 +246,7 @@ export function ChatPanel({ goal, step }: ChatPanelProps) {
               >
                 {message.role === 'assistant' ? (
                   message.content ? (
-                    <Suspense fallback={<p className="text-gray-400">渲染中...</p>}>
-                      <MarkdownRenderer content={message.content} />
-                    </Suspense>
+                    <LazyMarkdownRenderer content={message.content} />
                   ) : (
                     <p className="text-gray-400">AI 正在组织讲解...</p>
                   )

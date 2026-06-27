@@ -28,7 +28,6 @@ export function useTrackedMutation<T>({
   const queryClient = useQueryClient();
   const upsertTask = useAIGenerationStore((state) => state.upsertTask);
   const setTaskStatus = useAIGenerationStore((state) => state.setTaskStatus);
-  const setPanelOpen = useAIGenerationStore((state) => state.setPanelOpen);
 
   return useMutation<T>({
     mutationFn: () => runQueuedAIGenerationTask(taskId, run),
@@ -40,7 +39,6 @@ export function useTrackedMutation<T>({
         status: 'queued',
         scope,
       });
-      setPanelOpen(true);
     },
     onSuccess(data) {
       const description =

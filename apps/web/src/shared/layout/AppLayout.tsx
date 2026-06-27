@@ -54,7 +54,7 @@ export function AppLayout({ children }: AppLayoutProps) {
           <button
             aria-label={collapsed ? '展开侧边栏' : '折叠侧边栏'}
             className={
-              'flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 ' +
+              'flex h-7 w-7 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 cursor-pointer ' +
               (collapsed ? 'mx-auto' : '')
             }
             onClick={() => setCollapsed((c) => !c)}

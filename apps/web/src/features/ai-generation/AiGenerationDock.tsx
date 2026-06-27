@@ -92,7 +92,7 @@ export function AiGenerationDock() {
               </div>
               <button
                 aria-label="关闭 AI 生成任务面板"
-                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700"
+                className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-700 cursor-pointer"
                 onClick={() => setPanelOpen(false)}
                 type="button"
               >
@@ -151,7 +151,7 @@ export function AiGenerationDock() {
             <div className="flex items-center justify-between border-t border-gray-100 px-4 py-2.5">
               <span className="text-xs text-gray-400">保留最近 18 条生成记录</span>
               <button
-                className="text-xs font-medium text-gray-500 transition-colors hover:text-gray-800"
+                className="text-xs font-medium text-gray-500 transition-colors hover:text-gray-800 cursor-pointer"
                 onClick={clearSettledTasks}
                 type="button"
               >
@@ -166,7 +166,7 @@ export function AiGenerationDock() {
         aria-expanded={isPanelOpen}
         aria-label="打开 AI 生成任务队列"
         className={
-          'group relative flex h-13 min-w-13 items-center justify-center gap-2 rounded-full border px-3.5 shadow-lg transition-all ' +
+          'group relative flex h-13 min-w-13 items-center justify-center gap-2 rounded-full border px-3.5 shadow-lg transition-all cursor-pointer ' +
           (activeCount > 0
             ? 'border-blue-200 bg-blue-600 text-white shadow-blue-200/70 hover:bg-blue-700'
             : failedCount > 0
@@ -177,7 +177,6 @@ export function AiGenerationDock() {
         type="button"
       >
         {activeCount > 0 ? <Loader2 size={18} className="animate-spin" /> : <Brain size={18} />}
-        {badgeCount > 0 && <span className="text-sm font-semibold">{badgeCount}</span>}
         {badgeCount === 0 && isPanelOpen && <ChevronDown size={15} />}
         {badgeCount > 0 && (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-white px-1 text-[10px] font-bold text-blue-700 ring-1 ring-blue-100">

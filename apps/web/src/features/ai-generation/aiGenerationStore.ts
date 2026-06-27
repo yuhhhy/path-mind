@@ -83,7 +83,9 @@ export const useAIGenerationStore = create<AIGenerationState>((set) => ({
         task.id === id
           ? {
               ...task,
-              ...updates,
+              ...(updates?.title !== undefined ? { title: updates.title } : {}),
+              ...(updates?.description !== undefined ? { description: updates.description } : {}),
+              ...(updates?.error !== undefined ? { error: updates.error } : {}),
               status,
               updatedAt: Date.now(),
             }

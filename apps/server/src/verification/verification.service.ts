@@ -22,6 +22,7 @@ import type {
   transferGradingSchema,
 } from '../ai/ai.schemas.js';
 import { AiService } from '../ai/ai.service.js';
+import { SharedStreamRegistry } from '../common/sse/shared-stream-registry.js';
 import { DEV_USER_ID } from '../config/constants.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import type {
@@ -41,6 +42,12 @@ import {
 
 @Injectable()
 export class VerificationService {
+  private readonly streams = new SharedStreamRegistry<
+    | { type: 'delta'; content: string }
+    | { type: 'state'; data: Quiz | Transfer | StepSummary }
+    | { type: 'done'; data: Quiz | Transfer | StepSummary }
+  >();
+
   constructor(
     @Inject(AiService) private readonly aiService: AiService,
     @Inject(PrismaService) private readonly prisma: PrismaService,
@@ -136,6 +143,10 @@ export class VerificationService {
   }
 
   async *streamQuiz(stepId: string, input: GenerateQuizDto, signal?: AbortSignal) {
+    yield* this.streams.join(`quiz:${stepId}`, () => this.produceQuizStream(stepId, input), signal);
+  }
+
+  private async *produceQuizStream(stepId: string, input: GenerateQuizDto) {
     const context = await this.getStepContext(input.goalId, stepId);
     const draft = await this.prepareQuizDraft(stepId, input);
     let draftContent = draft.draftContent ?? '';
@@ -146,7 +157,7 @@ export class VerificationService {
     for await (const event of this.aiService.streamQuiz(
       buildQuizPrompt(context),
       draftContent,
-      signal,
+      undefined,
     )) {
       if (event.type === 'delta') {
         draftContent += event.content;
@@ -324,6 +335,14 @@ export class VerificationService {
   }
 
   async *streamTransfer(stepId: string, input: GenerateTransferDto, signal?: AbortSignal) {
+    yield* this.streams.join(
+      `transfer:${stepId}`,
+      () => this.produceTransferStream(stepId, input),
+      signal,
+    );
+  }
+
+  private async *produceTransferStream(stepId: string, input: GenerateTransferDto) {
     const [context, draft] = await Promise.all([
       this.getStepContext(input.goalId, stepId),
       this.prepareTransferDraft(stepId, input),
@@ -363,7 +382,7 @@ export class VerificationService {
     for await (const event of this.aiService.streamTransfer(
       buildTransferPrompt({ ...context, quizResults }),
       draftJson,
-      signal,
+      undefined,
     )) {
       if (event.type === 'delta') {
         draftJson += event.content;
@@ -457,6 +476,14 @@ export class VerificationService {
   }
 
   async *streamSubmitTransfer(stepId: string, input: SubmitTransferDto, signal?: AbortSignal) {
+    yield* this.streams.join(
+      `transfer-review:${stepId}:${input.content}`,
+      () => this.produceTransferReviewStream(stepId, input),
+      signal,
+    );
+  }
+
+  private async *produceTransferReviewStream(stepId: string, input: SubmitTransferDto) {
     const [draft, step] = await Promise.all([
       this.prepareTransferFeedbackDraft(stepId, input),
       this.prisma.learningStep.findFirst({
@@ -479,7 +506,7 @@ export class VerificationService {
         userAnswer: input.content,
       }),
       draftJson,
-      signal,
+      undefined,
     )) {
       if (event.type === 'delta') {
         draftJson += event.content;
@@ -599,6 +626,14 @@ export class VerificationService {
   }
 
   async *streamSummary(stepId: string, input: GenerateSummaryDto, signal?: AbortSignal) {
+    yield* this.streams.join(
+      `summary:${stepId}`,
+      () => this.produceSummaryStream(stepId, input),
+      signal,
+    );
+  }
+
+  private async *produceSummaryStream(stepId: string, input: GenerateSummaryDto) {
     const [context, quiz, transfer] = await Promise.all([
       this.getStepContext(input.goalId, stepId),
       this.prisma.quiz.findFirst({
@@ -650,7 +685,7 @@ export class VerificationService {
         },
       }),
       draftJson,
-      signal,
+      undefined,
     )) {
       if (event.type === 'delta') {
         draftJson += event.content;
