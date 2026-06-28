@@ -1,5 +1,5 @@
 import { Link, useRouterState } from '@tanstack/react-router';
-import { ArrowLeft, BookOpen, ChevronRight, LayoutDashboard, PanelLeft } from 'lucide-react';
+import { ArrowLeft, BookOpen, ChevronRight, LayoutDashboard, Orbit, PanelLeft } from 'lucide-react';
 import { type ReactNode, useCallback, useMemo, useState } from 'react';
 import { AiGenerationDock } from '../../features/ai-generation/AiGenerationDock';
 import { BreadcrumbContext, type BreadcrumbItem } from './BreadcrumbContext';
@@ -11,6 +11,7 @@ interface AppLayoutProps {
 const navItems = [
   { to: '/', label: '工作台', icon: LayoutDashboard },
   { to: '/goals', label: '学习目标', icon: BookOpen },
+  { to: '/workflow', label: 'Agent Workflow', icon: Orbit },
 ];
 
 export function AppLayout({ children }: AppLayoutProps) {
@@ -34,7 +35,13 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   const breadcrumbs = registrations.at(-1)?.items ?? [];
   const defaultLabel =
-    pathname === '/' ? '工作台' : pathname.startsWith('/goals') ? '学习目标' : 'PathMind';
+    pathname === '/'
+      ? '工作台'
+      : pathname.startsWith('/goals')
+        ? '学习目标'
+        : pathname.startsWith('/workflow')
+          ? 'Agent Workflow'
+          : 'PathMind';
   const backHref = breadcrumbs.length > 1 ? breadcrumbs[breadcrumbs.length - 2].href : undefined;
 
   return (

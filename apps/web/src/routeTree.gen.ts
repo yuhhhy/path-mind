@@ -9,20 +9,38 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as WorkflowRouteImport } from './routes/workflow'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as WorkflowIndexRouteImport } from './routes/workflow.index'
 import { Route as GoalsIndexRouteImport } from './routes/goals.index'
+import { Route as WorkflowSessionIdRouteImport } from './routes/workflow.$sessionId'
 import { Route as GoalsGoalIdRouteImport } from './routes/goals.$goalId'
 import { Route as GoalsGoalIdSessionStepIdRouteImport } from './routes/goals.$goalId.session.$stepId'
 
+const WorkflowRoute = WorkflowRouteImport.update({
+  id: '/workflow',
+  path: '/workflow',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const WorkflowIndexRoute = WorkflowIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => WorkflowRoute,
+} as any)
 const GoalsIndexRoute = GoalsIndexRouteImport.update({
   id: '/goals/',
   path: '/goals/',
   getParentRoute: () => rootRouteImport,
+} as any)
+const WorkflowSessionIdRoute = WorkflowSessionIdRouteImport.update({
+  id: '/$sessionId',
+  path: '/$sessionId',
+  getParentRoute: () => WorkflowRoute,
 } as any)
 const GoalsGoalIdRoute = GoalsGoalIdRouteImport.update({
   id: '/goals/$goalId',
@@ -38,48 +56,76 @@ const GoalsGoalIdSessionStepIdRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/workflow': typeof WorkflowRouteWithChildren
   '/goals/$goalId': typeof GoalsGoalIdRouteWithChildren
+  '/workflow/$sessionId': typeof WorkflowSessionIdRoute
   '/goals/': typeof GoalsIndexRoute
+  '/workflow/': typeof WorkflowIndexRoute
   '/goals/$goalId/session/$stepId': typeof GoalsGoalIdSessionStepIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/goals/$goalId': typeof GoalsGoalIdRouteWithChildren
+  '/workflow/$sessionId': typeof WorkflowSessionIdRoute
   '/goals': typeof GoalsIndexRoute
+  '/workflow': typeof WorkflowIndexRoute
   '/goals/$goalId/session/$stepId': typeof GoalsGoalIdSessionStepIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/workflow': typeof WorkflowRouteWithChildren
   '/goals/$goalId': typeof GoalsGoalIdRouteWithChildren
+  '/workflow/$sessionId': typeof WorkflowSessionIdRoute
   '/goals/': typeof GoalsIndexRoute
+  '/workflow/': typeof WorkflowIndexRoute
   '/goals/$goalId/session/$stepId': typeof GoalsGoalIdSessionStepIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/workflow'
     | '/goals/$goalId'
+    | '/workflow/$sessionId'
     | '/goals/'
+    | '/workflow/'
     | '/goals/$goalId/session/$stepId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/goals/$goalId' | '/goals' | '/goals/$goalId/session/$stepId'
+  to:
+    | '/'
+    | '/goals/$goalId'
+    | '/workflow/$sessionId'
+    | '/goals'
+    | '/workflow'
+    | '/goals/$goalId/session/$stepId'
   id:
     | '__root__'
     | '/'
+    | '/workflow'
     | '/goals/$goalId'
+    | '/workflow/$sessionId'
     | '/goals/'
+    | '/workflow/'
     | '/goals/$goalId/session/$stepId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  WorkflowRoute: typeof WorkflowRouteWithChildren
   GoalsGoalIdRoute: typeof GoalsGoalIdRouteWithChildren
   GoalsIndexRoute: typeof GoalsIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/workflow': {
+      id: '/workflow'
+      path: '/workflow'
+      fullPath: '/workflow'
+      preLoaderRoute: typeof WorkflowRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -87,12 +133,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/workflow/': {
+      id: '/workflow/'
+      path: '/'
+      fullPath: '/workflow/'
+      preLoaderRoute: typeof WorkflowIndexRouteImport
+      parentRoute: typeof WorkflowRoute
+    }
     '/goals/': {
       id: '/goals/'
       path: '/goals'
       fullPath: '/goals/'
       preLoaderRoute: typeof GoalsIndexRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/workflow/$sessionId': {
+      id: '/workflow/$sessionId'
+      path: '/$sessionId'
+      fullPath: '/workflow/$sessionId'
+      preLoaderRoute: typeof WorkflowSessionIdRouteImport
+      parentRoute: typeof WorkflowRoute
     }
     '/goals/$goalId': {
       id: '/goals/$goalId'
@@ -111,6 +171,20 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface WorkflowRouteChildren {
+  WorkflowSessionIdRoute: typeof WorkflowSessionIdRoute
+  WorkflowIndexRoute: typeof WorkflowIndexRoute
+}
+
+const WorkflowRouteChildren: WorkflowRouteChildren = {
+  WorkflowSessionIdRoute: WorkflowSessionIdRoute,
+  WorkflowIndexRoute: WorkflowIndexRoute,
+}
+
+const WorkflowRouteWithChildren = WorkflowRoute._addFileChildren(
+  WorkflowRouteChildren,
+)
+
 interface GoalsGoalIdRouteChildren {
   GoalsGoalIdSessionStepIdRoute: typeof GoalsGoalIdSessionStepIdRoute
 }
@@ -125,6 +199,7 @@ const GoalsGoalIdRouteWithChildren = GoalsGoalIdRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  WorkflowRoute: WorkflowRouteWithChildren,
   GoalsGoalIdRoute: GoalsGoalIdRouteWithChildren,
   GoalsIndexRoute: GoalsIndexRoute,
 }

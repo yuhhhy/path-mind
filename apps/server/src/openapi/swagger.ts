@@ -9,6 +9,7 @@ export function setupOpenApi(app: INestApplication) {
     .addTag('goals', 'Persisted learning goals and progress')
     .addTag('learning-path', 'AI learning path generation')
     .addTag('chat', 'AI teaching chat sessions')
+    .addTag('workflow', 'Stateful agent workflow sessions')
     .build();
 
   const document = SwaggerModule.createDocument(app, config);

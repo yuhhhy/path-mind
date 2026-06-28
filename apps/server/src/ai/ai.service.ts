@@ -145,6 +145,27 @@ export class AiService {
     return this.parseLearningPath(content);
   }
 
+  async completeText(
+    systemPrompt: string,
+    userPrompt: string,
+    options: { temperature?: number } = {},
+  ): Promise<string> {
+    const completion = await this.openai.chat.completions.create({
+      model: this.checkedModel,
+      temperature: options.temperature ?? 0.4,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: userPrompt },
+      ],
+    });
+
+    const content = completion.choices[0]?.message.content?.trim();
+    if (!content) {
+      throw new BadGatewayException('LLM 没有返回内容。');
+    }
+    return content;
+  }
+
   async generateQuiz(prompt: string): Promise<QuizGeneration> {
     return this.generateStrictJson(prompt, quizGenerationSchema, '测验题目');
   }

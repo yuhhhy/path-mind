@@ -7,6 +7,7 @@ import { envSchema } from './config/env.js';
 import { GoalsModule } from './goals/goals.module.js';
 import { LearningPathModule } from './learning-path/learning-path.module.js';
 import { VerificationModule } from './verification/verification.module.js';
+import { WorkflowModule } from './workflow/workflow.module.js';
 
 @Module({
   imports: [
@@ -21,6 +22,7 @@ import { VerificationModule } from './verification/verification.module.js';
     LearningPathModule,
     ChatModule,
     VerificationModule,
+    WorkflowModule,
   ],
   controllers: [AppController],
 })
